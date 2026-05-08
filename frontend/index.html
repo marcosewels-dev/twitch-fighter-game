@@ -7,31 +7,43 @@
     body {
       margin: 0;
       padding: 0;
-      background-color: transparent; /* Fondo transparente para OBS */
+      background-color: transparent; /* Transparente para OBS */
       overflow: hidden;
+      font-family: 'Arial', sans-serif;
     }
     #game-container {
       position: relative;
       width: 1280px;
       height: 720px;
-      background-color: transparent; /* Eliminamos el fondo gris de pruebas */
+      background-color: transparent;
     }
     canvas {
       display: block;
-      background-color: transparent;
+    }
+    #btn-test {
+      position: absolute;
+      top: 15px;
+      right: 15px;
+      z-index: 100;
+      padding: 8px 16px;
+      background-color: #9146ff; /* Color Twitch */
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    }
+    #btn-test:hover {
+      background-color: #772ce8;
     }
   </style>
 </head>
 <body>
   <div id="game-container">
+    <!--<button id="btn-test">Simular Pelea</button>-->
     <canvas id="gameCanvas" width="1280" height="720"></canvas>
   </div>
-			<!--<button
-			id="btn-test"
-			style="position: absolute; top: 10px; right: 10px; z-index: 100"
-		>
-			Simular Pelea
-		</button>-->
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>
