@@ -36,7 +36,8 @@ twitchClient.on('message', (channel, tags, message, self) => {
   const msg = message.trim().toLowerCase();
   
   if (msg.startsWith('!luchar')) {
-    const username = tags['display-name'] || tags.username;
+    // CORREGIDO: Aseguramos que username sea un string y no undefined
+    const username: string = (tags['display-name'] || tags.username || '').trim();
     if (!username) return;
 
     // Evitar que el mismo usuario se apunte dos veces
@@ -69,8 +70,14 @@ function chequearSiguientePelea() {
   if (peleaEnCurso || colaEspera.length < 2) return;
 
   peleaEnCurso = true;
-  const p1 = colaEspera.shift()!;
-  const p2 = colaEspera.shift()!;
+  const p1 = colaEspera.shift();
+  const p2 = colaEspera.shift();
+
+  // CORREGIDO: Validación estricta de que ambos luchadores existen antes de iniciar
+  if (!p1 || !p2) {
+    peleaEnCurso = false;
+    return;
+  }
 
   io.emit('actualizar_cola', colaEspera.map(j => `${j.nombre}(${j.clase[0].toUpperCase()})`));
   
@@ -93,14 +100,17 @@ io.on('connection', (socket) => {
   // 🧪 [PRUEBAS COMENTADAS] Recibir registros del botón de simulación del Frontend
   /*
   socket.on('test_unirse_cola', (datos: { nombre: string, clase: string }) => {
-    colaEspera.push(datos);
-    io.emit('actualizar_cola', colaEspera.map(j => `${j.nombre}(${j.clase[0].toUpperCase()})`));
-    chequearSiguientePelea();
+    if (datos && datos.nombre && datos.clase) {
+      colaEspera.push(datos);
+      io.emit('actualizar_cola', colaEspera.map(j => `${j.nombre}(${j.clase[0].toUpperCase()})`));
+      chequearSiguientePelea();
+    }
   });
   */
 
   // Escuchar cuando la pelea termina en el frontend
   socket.on('pelea_terminada', (datos: { ganador: string }) => {
+    if (!datos || !datos.ganador) return;
     console.log(`Pelea finalizada. Ganador: ${datos.ganador}`);
     
     // Esperamos 5 segundos mostrando la pantalla de victoria antes de lanzar la siguiente
