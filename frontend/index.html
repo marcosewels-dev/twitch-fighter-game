@@ -1,59 +1,37 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="es">
-	<head>
-		<meta charset="UTF-8" />
-		<title>Twitch Chat Arena</title>
-		<style>
-			body {
-				margin: 0;
-				background-color: transparent; /* Transparente para que funcione como overlay en OBS */
-				overflow: hidden;
-				font-family: "Arial", sans-serif;
-			}
-			#game-container {
-				position: relative;
-				width: 1280px;
-				height: 720px;
-				background-color: rgba(
-					20,
-					20,
-					20,
-					0.85
-				); /* Un fondo oscuro para pruebas (se puede quitar) */
-			}
-			canvas {
-				display: block;
-			}
-			#hud {
-				position: absolute;
-				top: 10px;
-				left: 10px;
-				color: white;
-				font-size: 16px;
-				text-shadow: 2px 2px 4px #000;
-			}
-		</style>
-	</head>
-	<body>
-		<div id="game-container">
-			<div id="hud">
-				Cola de espera: <span id="lista-cola">Vacia</span>
-			</div>
-			<canvas
-				id="gameCanvas"
-				width="1280"
-				height="720"
-			></canvas>
-		</div>
-		<!--<button
+<head>
+  <meta charset="UTF-8" />
+  <title>Twitch Chat Arena - Overlay</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: transparent; /* Fondo transparente para OBS */
+      overflow: hidden;
+    }
+    #game-container {
+      position: relative;
+      width: 1280px;
+      height: 720px;
+      background-color: transparent; /* Eliminamos el fondo gris de pruebas */
+    }
+    canvas {
+      display: block;
+      background-color: transparent;
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <canvas id="gameCanvas" width="1280" height="720"></canvas>
+  </div>
+			<!--<button
 			id="btn-test"
 			style="position: absolute; top: 10px; right: 10px; z-index: 100"
 		>
 			Simular Pelea
 		</button>-->
-		<script
-			type="module"
-			src="/src/main.ts"
-		></script>
-	</body>
+  <script type="module" src="/src/main.ts"></script>
+</body>
 </html>
