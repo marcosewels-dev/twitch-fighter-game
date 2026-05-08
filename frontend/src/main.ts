@@ -2,7 +2,7 @@ import { io } from 'socket.io-client';
 
 // En desarrollo usas 'http://localhost:3000'. En producción pon la URL de tu servidor en la nube.
 // const socket = io('http://localhost:3000');
-const socket = io('https://tu-app-backend.onrender.com');
+const socket = io('https://twitch-fighter-backend.onrender.com');
 
 
 const canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
