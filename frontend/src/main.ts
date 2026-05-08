@@ -8,7 +8,7 @@ const socket = io('https://twitch-fighter-backend.onrender.com');
 const canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
 const listaColaEl = document.getElementById('lista-cola')!;
-const btnTest = document.getElementById('btn-test') as HTMLButtonElement;
+//const btnTest = document.getElementById('btn-test') as HTMLButtonElement;
 
 type TipoLuchador = 'guerrero' | 'ninja' | 'mago';
 
