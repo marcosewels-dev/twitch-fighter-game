@@ -1,53 +1,50 @@
 import { io } from 'socket.io-client';
 
-// En desarrollo usas 'http://localhost:3000'. En producción pon la URL de tu servidor en la nube.
-// const socket = io('http://localhost:3000');
-const socket = io('https://twitch-fighter-backend.onrender.com');
-
+// Cambia esto a tu URL de Render cuando vayas a desplegarlo en producción
+const socket = io('http://localhost:3000'); 
 
 const canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
-const listaColaEl = document.getElementById('lista-cola')!;
-//const btnTest = document.getElementById('btn-test') as HTMLButtonElement;
+const btnTest = document.getElementById('btn-test') as HTMLButtonElement; // Reactivado para desarrollo
 
 type TipoLuchador = 'guerrero' | 'ninja' | 'mago';
 
-// --- Clase Partícula (Efectos de impactos/chispas) ---
+// --- Clase Partícula ---
 class Particula {
   x: number; y: number; vx: number; vy: number;
-  color: string; vida = 25;
+  color: string; vida = 20;
 
   constructor(x: number, y: number, color: string) {
     this.x = x;
     this.y = y;
-    this.vx = (Math.random() - 0.5) * 8;
-    this.vy = (Math.random() - 0.5) * 8 - 2;
+    this.vx = (Math.random() - 0.5) * 6;
+    this.vy = (Math.random() - 0.5) * 6 - 2;
     this.color = color;
   }
 
   actualizar() {
     this.x += this.vx;
     this.y += this.vy;
-    this.vy += 0.25; // Gravedad de la partícula
+    this.vy += 0.25;
     this.vida--;
   }
 
   dibujar(ctx: CanvasRenderingContext2D) {
     ctx.fillStyle = this.color;
-    ctx.fillRect(this.x, this.y, 4, 4);
+    ctx.fillRect(this.x, this.y, 3, 3);
   }
 }
 
-// --- Clase del Luchador (Emoji + Armas + Físicas) ---
+// --- Clase del Luchador Compacto ---
 class Luchador {
   x: number;
   y: number;
-  ancho = 60;
-  alto = 60;
+  ancho = 45; 
+  alto = 45;
   nombre: string;
   tipo: TipoLuchador;
   
-  // Estadísticas según Clase
+  // Stats
   vidaMax: number;
   vida: number;
   velocidad: number;
@@ -55,19 +52,19 @@ class Luchador {
   danoMin: number;
   danoMax: number;
 
-  // Físicas de combate
+  // Físicas
   vx = 0; vy = 0;
   enSuelo = false;
   gravedad = 0.6;
   friccion = 0.85;
   cooldownAtaque = 0;
 
-  // Render & Orientación
+  // Render & Animaciones
   emoji: string;
   armaEmoji: string;
   colorTematico: string;
   direccionMira: 'derecha' | 'izquierda' = 'derecha';
-  anguloArma = 0; // Se inclina al dar un tajo
+  anguloArma = 0;
 
   constructor(x: number, y: number, nombre: string, tipo: TipoLuchador) {
     this.x = x;
@@ -81,7 +78,7 @@ class Luchador {
       this.colorTematico = '#e74c3c';
       this.vidaMax = 145;
       this.velocidad = 2.4;
-      this.rangoAtaque = 80;
+      this.rangoAtaque = 70;
       this.danoMin = 7;
       this.danoMax = 15;
     } else if (tipo === 'ninja') {
@@ -90,7 +87,7 @@ class Luchador {
       this.colorTematico = '#2ecc71';
       this.vidaMax = 85;
       this.velocidad = 5.2;
-      this.rangoAtaque = 65;
+      this.rangoAtaque = 55;
       this.danoMin = 5;
       this.danoMax = 11;
     } else { // mago
@@ -99,7 +96,7 @@ class Luchador {
       this.colorTematico = '#9b59b6';
       this.vidaMax = 95;
       this.velocidad = 3.2;
-      this.rangoAtaque = 240;
+      this.rangoAtaque = 200;
       this.danoMin = 9;
       this.danoMax = 19;
     }
@@ -114,79 +111,75 @@ class Luchador {
     const centroY = this.y + this.alto / 2;
     ctx.translate(centroX, centroY);
 
-    // Espejar el render si el oponente está al otro lado
     if (this.direccionMira === 'izquierda') {
       ctx.scale(-1, 1);
     }
 
-    // Aura resplandeciente de Clase
-    ctx.shadowBlur = 20;
+    ctx.shadowBlur = 12;
     ctx.shadowColor = this.colorTematico;
 
-    // Dibujar avatar (Emoji)
-    ctx.font = '50px Arial';
+    ctx.font = '40px Arial'; 
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(this.emoji, 0, 0);
 
-    ctx.shadowBlur = 0; // Desactivar sombra para el arma
+    ctx.shadowBlur = 0;
 
-    // Dibujar el Arma y aplicar rotación de ataque
     ctx.save();
-    ctx.translate(25, 5); 
+    ctx.translate(20, 5); 
     ctx.rotate(this.anguloArma);
-    ctx.font = '35px Arial';
+    ctx.font = '28px Arial';
     ctx.fillText(this.armaEmoji, 0, 0);
     ctx.restore();
 
     ctx.restore();
 
-    // Nombre (Estático para evitar que se lea al revés si se espeja el personaje)
+    // Texto con contorno negro
     ctx.fillStyle = '#fff';
-    ctx.font = 'bold 15px Arial';
+    ctx.font = 'bold 13px Arial';
     ctx.textAlign = 'center';
-    ctx.fillText(this.nombre, centroX, this.y - 30);
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 3;
+    ctx.strokeText(this.nombre, centroX, this.y - 25);
+    ctx.fillText(this.nombre, centroX, this.y - 25);
 
     // Barra de Vida
-    ctx.fillStyle = '#222';
-    ctx.fillRect(centroX - 40, this.y - 18, 80, 8);
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(centroX - 30, this.y - 15, 60, 6);
     ctx.fillStyle = this.colorTematico;
-    ctx.fillRect(centroX - 40, this.y - 18, 80 * (this.vida / this.vidaMax), 8);
+    ctx.fillRect(centroX - 30, this.y - 15, 60 * (this.vida / this.vidaMax), 6);
   }
 
   actualizar() {
     if (this.cooldownAtaque > 0) this.cooldownAtaque--;
 
-    // Gravedad
     this.vy += this.gravedad;
     this.y += this.vy;
 
-    const sueloY = 450;
+    // Suelo de la arena compacto (abajo en la pantalla)
+    const sueloY = 600; 
     if (this.y >= sueloY) {
       this.y = sueloY;
       this.vy = 0;
       this.enSuelo = true;
     }
 
-    // Fricción horizontal para frenar retrocesos
     this.x += this.vx;
     this.vx *= this.friccion;
 
-    // Límites de la arena
     if (this.x < 50) this.x = 50;
     if (this.x > 1180) this.x = 1180;
 
-    // El arma vuelve lentamente a su posición de descanso
     this.anguloArma *= 0.8;
   }
 
   atacar() {
-    this.anguloArma = -Math.PI / 2.5; // Genera el movimiento de tajo/disparo
+    this.anguloArma = -Math.PI / 2.5;
   }
 
   saltar() {
     if (this.enSuelo) {
-      this.vy = -12;
+      this.vy = -11;
       this.enSuelo = false;
     }
   }
@@ -201,50 +194,42 @@ let particulas: Particula[] = [];
 let intensidadTemblor = 0;
 
 // --- Sockets ---
-socket.on('actualizar_cola', (cola: string[]) => {
-  listaColaEl.innerText = cola.length > 0 ? cola.join(', ') : 'Vacía';
-});
-
 socket.on('iniciar_pelea', (datos: { p1: string; claseP1: TipoLuchador; p2: string; claseP2: TipoLuchador }) => {
-  p1 = new Luchador(200, 450, datos.p1, datos.claseP1);
-  p2 = new Luchador(1000, 450, datos.p2, datos.claseP2);
+  p1 = new Luchador(150, 600, datos.p1, datos.claseP1);
+  p2 = new Luchador(1080, 600, datos.p2, datos.claseP2);
   peleaActiva = true;
   finDePeleaEnviado = false;
   particulas = [];
 });
 
 function spawnearParticulas(x: number, y: number, color: string) {
-  for (let i = 0; i < 15; i++) {
+  for (let i = 0; i < 10; i++) {
     particulas.push(new Particula(x, y, color));
   }
 }
 
-// --- Game Loop (Bucle Principal de Animación) ---
+// --- Game Loop ---
 function gameLoop() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   ctx.save();
-  // Sacudida de pantalla (Screen Shake) si hay impacto
   if (intensidadTemblor > 0) {
     const dx = (Math.random() - 0.5) * intensidadTemblor;
     const dy = (Math.random() - 0.5) * intensidadTemblor;
     ctx.translate(dx, dy);
-    intensidadTemblor *= 0.9;
+    intensidadTemblor *= 0.85;
     if (intensidadTemblor < 0.5) intensidadTemblor = 0;
   }
 
   if (peleaActiva && p1 && p2) {
-    // 1. Orientación de miradas hacia el rival
     p1.direccionMira = p1.x < p2.x ? 'derecha' : 'izquierda';
     p2.direccionMira = p2.x < p1.x ? 'derecha' : 'izquierda';
 
-    // 2. Comportamiento de saltos aleatorios
     if (Math.random() < 0.015) p1.saltar();
     if (Math.random() < 0.015) p2.saltar();
 
     const distancia = Math.abs(p1.x - p2.x);
 
-    // 3. Movimiento inteligente de aproximación según el rango de clase
     if (distancia > p1.rangoAtaque) {
       if (p1.x < p2.x) p1.x += p1.velocidad;
       else p1.x -= p1.velocidad;
@@ -255,29 +240,27 @@ function gameLoop() {
       else p2.x += p2.velocidad;
     }
 
-    // 4. Procesamiento de Ataques
-    // Ataque P1 -> P2
+    // Ataques
     if (distancia <= p1.rangoAtaque && p1.cooldownAtaque === 0) {
       p1.atacar();
       const dano = Math.floor(Math.random() * (p1.danoMax - p1.danoMin + 1)) + p1.danoMin;
       p2.vida -= dano;
-      p1.cooldownAtaque = p1.tipo === 'ninja' ? 18 : 35; // Ninjas atacan más rápido
+      p1.cooldownAtaque = p1.tipo === 'ninja' ? 18 : 35;
       
-      p2.vx = p1.tipo === 'mago' ? 8 : 16; // Empuje físico
-      intensidadTemblor = p1.tipo === 'guerrero' ? 8 : 4; // Guerreros sacuden más la pantalla
-      spawnearParticulas(p2.x + 30, p2.y + 30, p1.colorTematico);
+      p2.vx = p1.tipo === 'mago' ? 6 : 12;
+      intensidadTemblor = p1.tipo === 'guerrero' ? 6 : 3;
+      spawnearParticulas(p2.x + 22, p2.y + 22, p1.colorTematico);
     }
 
-    // Ataque P2 -> P1
     if (distancia <= p2.rangoAtaque && p2.cooldownAtaque === 0) {
       p2.atacar();
       const dano = Math.floor(Math.random() * (p2.danoMax - p2.danoMin + 1)) + p2.danoMin;
       p1.vida -= dano;
       p2.cooldownAtaque = p2.tipo === 'ninja' ? 18 : 35;
       
-      p1.vx = p2.tipo === 'mago' ? -8 : -16;
-      intensidadTemblor = p2.tipo === 'guerrero' ? 8 : 4;
-      spawnearParticulas(p1.x + 30, p1.y + 30, p2.colorTematico);
+      p1.vx = p2.tipo === 'mago' ? -6 : -12;
+      intensidadTemblor = p2.tipo === 'guerrero' ? 6 : 3;
+      spawnearParticulas(p1.x + 22, p1.y + 22, p2.colorTematico);
     }
 
     p1.vida = Math.max(0, p1.vida);
@@ -289,11 +272,10 @@ function gameLoop() {
     p1.dibujar(ctx);
     p2.dibujar(ctx);
 
-    // Comprobar K.O.
     if (p1.vida <= 0 || p2.vida <= 0) {
       peleaActiva = false;
       const ganador = p1.vida > 0 ? p1.nombre : p2.nombre;
-      intensidadTemblor = 20; // Sacudida final violenta
+      intensidadTemblor = 12;
       
       if (!finDePeleaEnviado) {
         finDePeleaEnviado = true;
@@ -301,26 +283,28 @@ function gameLoop() {
       }
     }
   } else if (p1 && p2) {
-    // Escena de Post-combate (Pantalla de ganador)
     p1.actualizar();
     p2.actualizar();
     p1.dibujar(ctx);
     p2.dibujar(ctx);
 
     const ganador = p1.vida > 0 ? p1.nombre : p2.nombre;
+    
     ctx.fillStyle = '#fff';
-    ctx.font = 'bold 48px Arial';
+    ctx.font = 'bold 36px Arial';
     ctx.textAlign = 'center';
-    ctx.fillText(`¡GANADOR: ${ganador}!`, canvas.width / 2, canvas.height / 2);
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 5;
+    ctx.strokeText(`¡GANADOR: ${ganador}!`, canvas.width / 2, 400);
+    ctx.fillText(`¡GANADOR: ${ganador}!`, canvas.width / 2, 400);
   } else {
-    // Pantalla de Reposo (Esperando cola)
-    ctx.fillStyle = '#888';
-    ctx.font = '24px Arial';
+    // Texto explicativo sutil para desarrollo
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.font = '16px Arial';
     ctx.textAlign = 'center';
-    ctx.fillText('Escribe !luchar [guerrero | ninja | mago] para unirte!', canvas.width / 2, canvas.height / 2);
+    ctx.fillText('Esperando pelea... Pulsa "Simular Pelea" arriba a la derecha', canvas.width / 2, 500);
   }
 
-  // Renderizar partículas activas
   particulas = particulas.filter(p => p.vida > 0);
   particulas.forEach(p => {
     p.actualizar();
@@ -331,10 +315,8 @@ function gameLoop() {
   requestAnimationFrame(gameLoop);
 }
 
-// 🧪 [PRUEBAS COMENTADAS] Botón de simulación en pantalla
-/*
+// --- Botón de simulación reactivado para pruebas locales ---
 if (btnTest) {
-  btnTest.style.display = 'none'; // Ocultar el botón visualmente
   btnTest.addEventListener('click', () => {
     const nombresFicticios = ['Alpha', 'Beta', 'Gamma', 'Delta', 'Zeta', 'Omega'];
     const clasesDisponibles = ['guerrero', 'ninja', 'mago'];
@@ -345,13 +327,16 @@ if (btnTest) {
       p2Ficticio = nombresFicticios[Math.floor(Math.random() * nombresFicticios.length)];
     }
 
-    const c1Ficticia = clasesDisponibles[Math.floor(Math.random() * clasesDisponibles.length)];
-    const c2Ficticia = clasesDisponibles[Math.floor(Math.random() * clasesDisponibles.length)];
+    const c1Ficticia = clasesDisponibles[Math.floor(Math.random() * clasesDisponibles.length)] as TipoLuchador;
+    const c2Ficticia = clasesDisponibles[Math.floor(Math.random() * clasesDisponibles.length)] as TipoLuchador;
 
-    socket.emit('test_unirse_cola', { nombre: p1Ficticio, clase: c1Ficticia });
-    socket.emit('test_unirse_cola', { nombre: p2Ficticio, clase: c2Ficticia });
+    // Lanzamos el inicio directamente al frontend
+    p1 = new Luchador(150, 600, p1Ficticio, c1Ficticia);
+    p2 = new Luchador(1080, 600, p2Ficticio, c2Ficticia);
+    peleaActiva = true;
+    finDePeleaEnviado = false;
+    particulas = [];
   });
 }
-*/
 
 gameLoop();
