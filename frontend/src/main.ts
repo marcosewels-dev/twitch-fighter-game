@@ -1,15 +1,18 @@
 import { io } from 'socket.io-client';
 
-// Cambia esto a tu URL de Render cuando vayas a desplegarlo en producción
-const socket = io('http://localhost:3000'); 
+// 🔌 Conexión inteligente: Detecta automáticamente si estás en local o en producción
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
+
+const socket = io(BACKEND_URL, {
+  transports: ['websocket', 'polling']
+}); 
 
 const canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
-const btnTest = document.getElementById('btn-test') as HTMLButtonElement; // Reactivado para desarrollo
 
 type TipoLuchador = 'guerrero' | 'ninja' | 'mago';
 
-// --- Clase Partícula ---
+// --- Partículas de Impacto ---
 class Particula {
   x: number; y: number; vx: number; vy: number;
   color: string; vida = 20;
@@ -35,7 +38,7 @@ class Particula {
   }
 }
 
-// --- Clase del Luchador Compacto ---
+// --- Clase Luchador ---
 class Luchador {
   x: number;
   y: number;
@@ -44,7 +47,6 @@ class Luchador {
   nombre: string;
   tipo: TipoLuchador;
   
-  // Stats
   vidaMax: number;
   vida: number;
   velocidad: number;
@@ -52,14 +54,12 @@ class Luchador {
   danoMin: number;
   danoMax: number;
 
-  // Físicas
   vx = 0; vy = 0;
   enSuelo = false;
   gravedad = 0.6;
   friccion = 0.85;
   cooldownAtaque = 0;
 
-  // Render & Animaciones
   emoji: string;
   armaEmoji: string;
   colorTematico: string;
@@ -134,7 +134,7 @@ class Luchador {
 
     ctx.restore();
 
-    // Texto con contorno negro
+    // Nombre con borde para visibilidad en OBS
     ctx.fillStyle = '#fff';
     ctx.font = 'bold 13px Arial';
     ctx.textAlign = 'center';
@@ -156,8 +156,7 @@ class Luchador {
     this.vy += this.gravedad;
     this.y += this.vy;
 
-    // Suelo de la arena compacto (abajo en la pantalla)
-    const sueloY = 600; 
+    const sueloY = 600; // Altura optimizada para dejar libre el centro de la pantalla
     if (this.y >= sueloY) {
       this.y = sueloY;
       this.vy = 0;
@@ -193,7 +192,7 @@ let finDePeleaEnviado = false;
 let particulas: Particula[] = [];
 let intensidadTemblor = 0;
 
-// --- Sockets ---
+// --- Recepción de Eventos de Servidor ---
 socket.on('iniciar_pelea', (datos: { p1: string; claseP1: TipoLuchador; p2: string; claseP2: TipoLuchador }) => {
   p1 = new Luchador(150, 600, datos.p1, datos.claseP1);
   p2 = new Luchador(1080, 600, datos.p2, datos.claseP2);
@@ -298,11 +297,10 @@ function gameLoop() {
     ctx.strokeText(`¡GANADOR: ${ganador}!`, canvas.width / 2, 400);
     ctx.fillText(`¡GANADOR: ${ganador}!`, canvas.width / 2, 400);
   } else {
-    // Texto explicativo sutil para desarrollo
     ctx.fillStyle = 'rgba(255,255,255,0.4)';
     ctx.font = '16px Arial';
     ctx.textAlign = 'center';
-    ctx.fillText('Esperando pelea... Pulsa "Simular Pelea" arriba a la derecha', canvas.width / 2, 500);
+    ctx.fillText('Esperando gladiadores en la arena...', canvas.width / 2, 500);
   }
 
   particulas = particulas.filter(p => p.vida > 0);
@@ -313,30 +311,6 @@ function gameLoop() {
 
   ctx.restore();
   requestAnimationFrame(gameLoop);
-}
-
-// --- Botón de simulación reactivado para pruebas locales ---
-if (btnTest) {
-  btnTest.addEventListener('click', () => {
-    const nombresFicticios = ['Alpha', 'Beta', 'Gamma', 'Delta', 'Zeta', 'Omega'];
-    const clasesDisponibles = ['guerrero', 'ninja', 'mago'];
-    
-    const p1Ficticio = nombresFicticios[Math.floor(Math.random() * nombresFicticios.length)];
-    let p2Ficticio = nombresFicticios[Math.floor(Math.random() * nombresFicticios.length)];
-    while (p1Ficticio === p2Ficticio) {
-      p2Ficticio = nombresFicticios[Math.floor(Math.random() * nombresFicticios.length)];
-    }
-
-    const c1Ficticia = clasesDisponibles[Math.floor(Math.random() * clasesDisponibles.length)] as TipoLuchador;
-    const c2Ficticia = clasesDisponibles[Math.floor(Math.random() * clasesDisponibles.length)] as TipoLuchador;
-
-    // Lanzamos el inicio directamente al frontend
-    p1 = new Luchador(150, 600, p1Ficticio, c1Ficticia);
-    p2 = new Luchador(1080, 600, p2Ficticio, c2Ficticia);
-    peleaActiva = true;
-    finDePeleaEnviado = false;
-    particulas = [];
-  });
 }
 
 gameLoop();
