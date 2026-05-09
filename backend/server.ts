@@ -3,117 +3,305 @@ import http from 'http';
 import { Server } from 'socket.io';
 import tmi from 'tmi.js';
 import cors from 'cors';
+import mongoose from 'mongoose';
 
 const app = express();
 app.use(cors());
-const server = http.createServer(app);
-const io = new Server(server, {
-  cors: { origin: "*" }
+
+// Endpoint público para consultar el Ranking (Top 10 Global)
+app.get('/api/ranking', async (req, res) => {
+  try {
+    const jugadores = await Jugador.find();
+    
+    // Calculamos las victorias totales sumando el rendimiento de todas sus clases
+    const ranking = jugadores.map(j => {
+      const victoriasTotales = (j.guerrero?.victorias || 0) + 
+                               (j.ninja?.victorias || 0) + 
+                               (j.mago?.victorias || 0);
+      return {
+        username: j.username,
+        victorias: victoriasTotales,
+        claseActual: j.claseActual
+      };
+    })
+    .filter(j => j.victorias > 0) // Solo listamos jugadores con victorias
+    .sort((a, b) => b.victorias - a.victorias)
+    .slice(0, 10);
+
+    res.json(ranking);
+  } catch (error) {
+    console.error('Error al obtener ranking:', error);
+    res.status(500).json({ error: 'Error al obtener el ranking de la base de datos' });
+  }
 });
 
-interface JugadorCola {
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: ["http://localhost:5173", "http://127.0.0.1:5173", "*"], // Permitimos local y Vercel en producción
+    methods: ["GET", "POST"],
+    credentials: true
+  }
+});
+
+// ==========================================
+// 💾 CONEXIÓN A MONGODB ATLAS
+// ==========================================
+// Usa tu variable de entorno en Render para producción
+const MONGO_URI = process.env.MONGO_URI || 'TU_CADENA_DE_CONEXION_DE_MONGODB_ATLAS';
+
+mongoose.connect(MONGO_URI)
+  .then(() => console.log('✅ Conectado con éxito a MongoDB Atlas'))
+  .catch(err => console.error('❌ Error al conectar a MongoDB:', err));
+
+// Esquema de base de datos
+const jugadorSchema = new mongoose.Schema({
+  twitchId: { type: String, required: true, unique: true },
+  username: { type: String, required: true },
+  claseActual: { type: String, default: 'guerrero' },
+  
+  guerrero: {
+    nivel: { type: Number, default: 1 },
+    xp: { type: Number, default: 0 },
+    victorias: { type: Number, default: 0 },
+    derrotas: { type: Number, default: 0 }
+  },
+  ninja: {
+    nivel: { type: Number, default: 1 },
+    xp: { type: Number, default: 0 },
+    victorias: { type: Number, default: 0 },
+    derrotas: { type: Number, default: 0 }
+  },
+  mago: {
+    nivel: { type: Number, default: 1 },
+    xp: { type: Number, default: 0 },
+    victorias: { type: Number, default: 0 },
+    derrotas: { type: Number, default: 0 }
+  }
+});
+
+const Jugador = mongoose.model('Jugador', jugadorSchema);
+
+// ==========================================
+// ⚔️ CONTROL DE LA COLA Y COMBATES
+// ==========================================
+interface JugadorPelea {
+  twitchId: string;
   nombre: string;
   clase: string;
+  nivel: number;
 }
 
-// Cola de objetos de jugadores
-let colaEspera: JugadorCola[] = [];
+let colaEspera: JugadorPelea[] = [];
 let peleaEnCurso = false;
+let luchadorActual1: JugadorPelea | null = null;
+let luchadorActual2: JugadorPelea | null = null;
 
 // ==========================================
 // 🔌 CONEXIÓN REAL A TWITCH (ACTIVA)
 // ==========================================
 const twitchClient = new tmi.Client({
   options: { debug: true },
-  channels: [ 'danqvix' ] // 👈 CAMBIA ESTO por el nombre de Twitch de tu amigo (en minúsculas)
+  channels: [ 'danqvix' ] // <--- ¡Cambia esto por el canal de tu amigo!
 });
-
 twitchClient.connect().catch(console.error);
 
-twitchClient.on('message', (channel, tags, message, self) => {
+twitchClient.on('message', async (channel, tags, message, self) => {
   if (self) return;
 
   const msg = message.trim().toLowerCase();
   
+  // COMANDO !LUCHAR
   if (msg.startsWith('!luchar')) {
-    // CORREGIDO: Aseguramos que username sea un string y no undefined
-    const username: string = (tags['display-name'] || tags.username || '').trim();
-    if (!username) return;
+    const twitchId = tags['user-id'];
+    const username = tags['display-name'] || tags.username;
+    
+    if (!twitchId || !username) return;
 
-    // Evitar que el mismo usuario se apunte dos veces
-    if (colaEspera.some(j => j.nombre === username)) {
-      twitchClient.say(channel, `@${username}, ya estás en la cola de espera.`);
+    if (colaEspera.some(j => j.twitchId === twitchId)) {
+      twitchClient.say(channel, `@${username}, ya estás en cola.`);
       return;
     }
 
-    // Extraer la clase si se especifica: "!luchar ninja" -> "ninja"
     const partes = msg.split(' ');
-    let claseElegida = partes[1] || ''; 
+    let claseElegida = partes[1] || '';
     const clasesValidas = ['guerrero', 'ninja', 'mago'];
 
-    if (!clasesValidas.includes(claseElegida)) {
-      // Si no eligen clase o la escriben mal, se asigna una al azar
-      claseElegida = clasesValidas[Math.floor(Math.random() * clasesValidas.length)];
+    let perfil = await Jugador.findOne({ twitchId });
+    if (!perfil) {
+      perfil = new Jugador({
+        twitchId,
+        username,
+        claseActual: clasesValidas.includes(claseElegida) ? claseElegida : 'guerrero'
+      });
+      await perfil.save();
     }
-    
-    colaEspera.push({ nombre: username, clase: claseElegida });
-    twitchClient.say(channel, `@${username} se une como [${claseElegida.toUpperCase()}]! (Cola: ${colaEspera.length})`);
-    
-    // Enviamos la cola formateada al frontend para que la muestre en pantalla
-    io.emit('actualizar_cola', colaEspera.map(j => `${j.nombre}(${j.clase[0].toUpperCase()})`));
+
+    if (clasesValidas.includes(claseElegida) && perfil.claseActual !== claseElegida) {
+      perfil.claseActual = claseElegida;
+      await perfil.save();
+      const nivelNuevaClase = (perfil as any)[claseElegida].nivel;
+      twitchClient.say(channel, `🔄 @${username} cambió su rol a [${claseElegida.toUpperCase()}] (Nivel ${nivelNuevaClase})!`);
+    }
+
+    const claseActual = perfil.claseActual;
+    const nivelActual = (perfil as any)[claseActual].nivel;
+
+    colaEspera.push({
+      twitchId,
+      nombre: username,
+      clase: claseActual,
+      nivel: nivelActual
+    });
+
+    twitchClient.say(channel, `⚔️ @${username} [${claseActual.toUpperCase()} Nv.${nivelActual}] listo en cola!`);
+    io.emit('actualizar_cola', colaEspera.map(j => `${j.nombre}(Nv.${j.nivel})`));
     chequearSiguientePelea();
+  }
+
+  // COMANDO !RANKING
+  else if (msg === '!ranking' || msg === '!top') {
+    try {
+      const jugadores = await Jugador.find();
+      
+      const ranking = jugadores.map(j => {
+        const victoriasTotales = (j.guerrero?.victorias || 0) + 
+                                 (j.ninja?.victorias || 0) + 
+                                 (j.mago?.victorias || 0);
+        return { username: j.username, victorias: victoriasTotales };
+      })
+      .filter(j => j.victorias > 0)
+      .sort((a, b) => b.victorias - a.victorias)
+      .slice(0, 5);
+
+      if (ranking.length === 0) {
+        twitchClient.say(channel, "🏆 ¡La arena está limpia! Aún no hay campeones con victorias.");
+        return;
+      }
+
+      const textoRanking = ranking.map((j, index) => `${index + 1}. @${j.username} (${j.victorias} 👑)`).join(' | ');
+      twitchClient.say(channel, `🏆 TOP 5 ARENA: ${textoRanking}`);
+    } catch (error) {
+      console.error('Error al procesar !ranking:', error);
+    }
   }
 });
 
-// Lógica para emparejar y lanzar combates
 function chequearSiguientePelea() {
   if (peleaEnCurso || colaEspera.length < 2) return;
 
   peleaEnCurso = true;
-  const p1 = colaEspera.shift();
-  const p2 = colaEspera.shift();
+  luchadorActual1 = colaEspera.shift() || null;
+  luchadorActual2 = colaEspera.shift() || null;
 
-  // CORREGIDO: Validación estricta de que ambos luchadores existen antes de iniciar
-  if (!p1 || !p2) {
+  if (!luchadorActual1 || !luchadorActual2) {
     peleaEnCurso = false;
     return;
   }
 
-  io.emit('actualizar_cola', colaEspera.map(j => `${j.nombre}(${j.clase[0].toUpperCase()})`));
-  
-  console.log(`Iniciando pelea: ${p1.nombre} (${p1.clase}) vs ${p2.nombre} (${p2.clase})`);
+  io.emit('actualizar_cola', colaEspera.map(j => `${j.nombre}(Nv.${j.nivel})`));
   io.emit('iniciar_pelea', { 
-    p1: p1.nombre, 
-    claseP1: p1.clase, 
-    p2: p2.nombre, 
-    claseP2: p2.clase 
+    p1: luchadorActual1.nombre, 
+    claseP1: luchadorActual1.clase, 
+    p2: luchadorActual2.nombre, 
+    claseP2: luchadorActual2.clase 
   });
 }
 
-// Eventos de conexión con el navegador (OBS / Frontend)
+// Conexiones WebSockets
 io.on('connection', (socket) => {
   console.log('Frontend conectado.');
-  
-  // Enviamos el estado de la cola al conectar
-  socket.emit('actualizar_cola', colaEspera.map(j => `${j.nombre}(${j.clase[0].toUpperCase()})`));
+  socket.emit('actualizar_cola', colaEspera.map(j => `${j.nombre}(Nv.${j.nivel})`));
 
-  // 🧪 [PRUEBAS COMENTADAS] Recibir registros del botón de simulación del Frontend
+  // 🧪 [DESACTIVADO EN PRODUCCIÓN] Pruebas locales comentadas
   /*
-  socket.on('test_unirse_cola', (datos: { nombre: string, clase: string }) => {
-    if (datos && datos.nombre && datos.clase) {
-      colaEspera.push(datos);
-      io.emit('actualizar_cola', colaEspera.map(j => `${j.nombre}(${j.clase[0].toUpperCase()})`));
-      chequearSiguientePelea();
+  socket.on('test_unirse_cola', async (datos: { nombre: string, clase: string }) => {
+    const fakeTwitchId = `test_id_${datos.nombre.toLowerCase()}`;
+    
+    let perfil = await Jugador.findOne({ twitchId: fakeTwitchId });
+    if (!perfil) {
+      perfil = new Jugador({
+        twitchId: fakeTwitchId,
+        username: datos.nombre,
+        claseActual: datos.clase
+      });
+      await perfil.save();
+      console.log(`💾 [MongoDB] Creado nuevo perfil para: ${datos.nombre}`);
+    } else {
+      if (perfil.claseActual !== datos.clase) {
+        perfil.claseActual = datos.clase;
+        await perfil.save();
+        console.log(`🔄 [MongoDB] Actualizada clase de ${datos.nombre} a ${datos.clase}`);
+      }
     }
+
+    const claseActual = perfil.claseActual;
+    const nivelActual = (perfil as any)[claseActual].nivel;
+
+    colaEspera.push({
+      twitchId: fakeTwitchId,
+      nombre: datos.nombre,
+      clase: claseActual,
+      nivel: nivelActual
+    });
+
+    io.emit('actualizar_cola', colaEspera.map(j => `${j.nombre}(Nv.${j.nivel})`));
+    chequearSiguientePelea();
   });
   */
 
-  // Escuchar cuando la pelea termina en el frontend
-  socket.on('pelea_terminada', (datos: { ganador: string }) => {
-    if (!datos || !datos.ganador) return;
-    console.log(`Pelea finalizada. Ganador: ${datos.ganador}`);
+  // Procesar final del combate y guardar XP
+  socket.on('pelea_terminada', async (datos: { ganador: string }) => {
+    if (!luchadorActual1 || !luchadorActual2) return;
+
+    const ganadorNombre = datos.ganador;
+    const esP1Ganador = luchadorActual1.nombre === ganadorNombre;
     
-    // Esperamos 5 segundos mostrando la pantalla de victoria antes de lanzar la siguiente
+    const idGanador = esP1Ganador ? luchadorActual1.twitchId : luchadorActual2.twitchId;
+    const idPerdedor = esP1Ganador ? luchadorActual2.twitchId : luchadorActual1.twitchId;
+
+    const claseGanador = esP1Ganador ? luchadorActual1.clase : luchadorActual2.clase;
+    const clasePerdedor = esP1Ganador ? luchadorActual2.clase : luchadorActual1.clase;
+
+    try {
+      // 1. Ganador: +50 XP y +1 Victoria
+      const perfilGanador = await Jugador.findOne({ twitchId: idGanador });
+      if (perfilGanador) {
+        const claseData = (perfilGanador as any)[claseGanador];
+        claseData.victorias += 1;
+        claseData.xp += 50;
+
+        const xpNecesaria = claseData.nivel * 100;
+        if (claseData.xp >= xpNecesaria) {
+          claseData.nivel += 1;
+          claseData.xp = 0;
+          console.log(`🎉 ¡LEVEL UP! @${perfilGanador.username} subió a Nivel ${claseData.nivel} (${claseGanador})`);
+        }
+        await perfilGanador.save();
+      }
+
+      // 2. Perdedor: +15 XP y +1 Derrota
+      const perfilPerdedor = await Jugador.findOne({ twitchId: idPerdedor });
+      if (perfilPerdedor) {
+        const claseData = (perfilPerdedor as any)[clasePerdedor];
+        claseData.derrotas += 1;
+        claseData.xp += 15;
+
+        const xpNecesaria = claseData.nivel * 100;
+        if (claseData.xp >= xpNecesaria) {
+          claseData.nivel += 1;
+          claseData.xp = 0;
+          console.log(`🎉 ¡LEVEL UP! @${perfilPerdedor.username} subió a Nivel ${claseData.nivel} (${clasePerdedor})`);
+        }
+        await perfilPerdedor.save();
+      }
+    } catch (error) {
+      console.error('Error al actualizar estadísticas:', error);
+    }
+
+    luchadorActual1 = null;
+    luchadorActual2 = null;
+
     setTimeout(() => {
       peleaEnCurso = false;
       chequearSiguientePelea();
@@ -121,25 +309,6 @@ io.on('connection', (socket) => {
   });
 });
 
-// 🧪 [PRUEBAS COMENTADAS] Permitir meter bots escribiendo en la consola del servidor
-/*
-process.stdin.setEncoding('utf-8');
-process.stdin.on('data', (data) => {
-  const input = data.toString().trim();
-  if (input) {
-    const partes = input.split(' ');
-    const nombre = partes[0];
-    let clase = partes[1] || 'guerrero';
-    
-    colaEspera.push({ nombre, clase });
-    console.log(`[TEST] ${nombre} (${clase}) añadido a la cola.`);
-    io.emit('actualizar_cola', colaEspera.map(j => `${j.nombre}(${j.clase[0].toUpperCase()})`));
-    chequearSiguientePelea();
-  }
-});
-*/
-
-// Usar puerto dinámico para facilitar el despliegue en la nube (Render/Heroku/etc)
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Servidor corriendo en el puerto ${PORT}`);
