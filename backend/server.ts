@@ -47,8 +47,8 @@ const io = new Server(server, {
 // ==========================================
 // 💾 CONEXIÓN A MONGODB ATLAS
 // ==========================================
-// Usa tu variable de entorno en Render para producción
-const MONGO_URI = process.env.MONGO_URI || 'TU_CADENA_DE_CONEXION_DE_MONGODB_ATLAS';
+// Lee de forma segura la variable de entorno configurada en Render
+const MONGO_URI = process.env.MONGO_URI || 'ERROR: No se ha configurado la variable de entorno MONGO_URI';
 
 mongoose.connect(MONGO_URI)
   .then(() => console.log('✅ Conectado con éxito a MongoDB Atlas'))
@@ -102,7 +102,7 @@ let luchadorActual2: JugadorPelea | null = null;
 // ==========================================
 const twitchClient = new tmi.Client({
   options: { debug: true },
-  channels: [ 'danqvix' ] // <--- ¡Cambia esto por el canal de tu amigo!
+  channels: [ 'danqvix' ] // <--- ¡Cambia esto por el canal de tu amigo en minúsculas!
 });
 twitchClient.connect().catch(console.error);
 
@@ -110,16 +110,24 @@ twitchClient.on('message', async (channel, tags, message, self) => {
   if (self) return;
 
   const msg = message.trim().toLowerCase();
+  const twitchId = tags['user-id'];
+  const username = tags['display-name'] || tags.username;
   
-  // COMANDO !LUCHAR
-  if (msg.startsWith('!luchar')) {
-    const twitchId = tags['user-id'];
-    const username = tags['display-name'] || tags.username;
-    
-    if (!twitchId || !username) return;
+  if (!twitchId || !username) return;
 
+  // COMANDO: !COMANDOS / !AYUDA
+  if (msg === '!comandos' || msg === '!ayuda' || msg === '!arena') {
+    twitchClient.say(
+      channel, 
+      `🎮 [ARENA COMMANDS] ⚔️ !luchar [clase] (Únete con guerrero, ninja o mago) | 👤 !stats (Mira tu nivel y récord) | 🔄 !clase [rol] (Cambia tu clase activa) | 🏆 !ranking (Top 5 del canal)`
+    );
+    return;
+  }
+
+  // COMANDO: !LUCHAR
+  if (msg.startsWith('!luchar')) {
     if (colaEspera.some(j => j.twitchId === twitchId)) {
-      twitchClient.say(channel, `@${username}, ya estás en cola.`);
+      twitchClient.say(channel, `@${username}, ya estás en la cola de espera de la arena.`);
       return;
     }
 
@@ -137,11 +145,12 @@ twitchClient.on('message', async (channel, tags, message, self) => {
       await perfil.save();
     }
 
+    // Si escribe una clase válida al unirse y es distinta, la cambiamos
     if (clasesValidas.includes(claseElegida) && perfil.claseActual !== claseElegida) {
       perfil.claseActual = claseElegida;
       await perfil.save();
       const nivelNuevaClase = (perfil as any)[claseElegida].nivel;
-      twitchClient.say(channel, `🔄 @${username} cambió su rol a [${claseElegida.toUpperCase()}] (Nivel ${nivelNuevaClase})!`);
+      twitchClient.say(channel, `🔄 @${username} cambió su rol activo a [${claseElegida.toUpperCase()}] (Nivel ${nivelNuevaClase})!`);
     }
 
     const claseActual = perfil.claseActual;
@@ -154,12 +163,70 @@ twitchClient.on('message', async (channel, tags, message, self) => {
       nivel: nivelActual
     });
 
-    twitchClient.say(channel, `⚔️ @${username} [${claseActual.toUpperCase()} Nv.${nivelActual}] listo en cola!`);
+    twitchClient.say(channel, `⚔️ @${username} [${claseActual.toUpperCase()} Nv.${nivelActual}] listo en la cola! (Total: ${colaEspera.length})`);
     io.emit('actualizar_cola', colaEspera.map(j => `${j.nombre}(Nv.${j.nivel})`));
     chequearSiguientePelea();
   }
 
-  // COMANDO !RANKING
+  // COMANDO: !STATS / !PERFIL
+  else if (msg === '!stats' || msg === '!perfil') {
+    try {
+      const perfil = await Jugador.findOne({ twitchId });
+      
+      if (!perfil) {
+        twitchClient.say(channel, `👋 @${username}, aún no has luchado en la arena. ¡Escribe !luchar para registrarte gratis!`);
+        return;
+      }
+
+      const clase = perfil.claseActual;
+      const claseData = (perfil as any)[clase];
+      const xpSiguienteNivel = claseData.nivel * 100;
+
+      twitchClient.say(
+        channel, 
+        `👤 [@${username}] Rol Activo: ${clase.toUpperCase()} (Nv. ${claseData.nivel}) | 📈 XP: ${claseData.xp}/${xpSiguienteNivel} | 👑 Victorias: ${claseData.victorias} | 💀 Derrotas: ${claseData.derrotas}`
+      );
+    } catch (error) {
+      console.error('Error al procesar !stats:', error);
+    }
+  }
+
+  // COMANDO: !CLASE [guerrero/ninja/mago]
+  else if (msg.startsWith('!clase') || msg.startsWith('!rol')) {
+    const partes = msg.split(' ');
+    const claseElegida = partes[1];
+    const clasesValidas = ['guerrero', 'ninja', 'mago'];
+
+    if (!claseElegida || !clasesValidas.includes(claseElegida)) {
+      twitchClient.say(channel, `❌ @${username}, elige una clase válida: !clase guerrero | !clase ninja | !clase mago`);
+      return;
+    }
+
+    try {
+      let perfil = await Jugador.findOne({ twitchId });
+      
+      if (!perfil) {
+        // Si no tiene perfil, lo creamos directamente con esa clase
+        perfil = new Jugador({
+          twitchId,
+          username,
+          claseActual: claseElegida
+        });
+        await perfil.save();
+      } else {
+        perfil.claseActual = claseElegida;
+        await perfil.save();
+      }
+
+      const nivelClase = (perfil as any)[claseElegida].nivel;
+      twitchClient.say(channel, `✨ @${username}, ahora eres un [${claseElegida.toUpperCase()}] de Nivel ${nivelClase}.`);
+
+    } catch (error) {
+      console.error('Error al cambiar clase:', error);
+    }
+  }
+
+  // COMANDO: !RANKING
   else if (msg === '!ranking' || msg === '!top') {
     try {
       const jugadores = await Jugador.find();
@@ -212,43 +279,6 @@ function chequearSiguientePelea() {
 io.on('connection', (socket) => {
   console.log('Frontend conectado.');
   socket.emit('actualizar_cola', colaEspera.map(j => `${j.nombre}(Nv.${j.nivel})`));
-
-  // 🧪 [DESACTIVADO EN PRODUCCIÓN] Pruebas locales comentadas
-  /*
-  socket.on('test_unirse_cola', async (datos: { nombre: string, clase: string }) => {
-    const fakeTwitchId = `test_id_${datos.nombre.toLowerCase()}`;
-    
-    let perfil = await Jugador.findOne({ twitchId: fakeTwitchId });
-    if (!perfil) {
-      perfil = new Jugador({
-        twitchId: fakeTwitchId,
-        username: datos.nombre,
-        claseActual: datos.clase
-      });
-      await perfil.save();
-      console.log(`💾 [MongoDB] Creado nuevo perfil para: ${datos.nombre}`);
-    } else {
-      if (perfil.claseActual !== datos.clase) {
-        perfil.claseActual = datos.clase;
-        await perfil.save();
-        console.log(`🔄 [MongoDB] Actualizada clase de ${datos.nombre} a ${datos.clase}`);
-      }
-    }
-
-    const claseActual = perfil.claseActual;
-    const nivelActual = (perfil as any)[claseActual].nivel;
-
-    colaEspera.push({
-      twitchId: fakeTwitchId,
-      nombre: datos.nombre,
-      clase: claseActual,
-      nivel: nivelActual
-    });
-
-    io.emit('actualizar_cola', colaEspera.map(j => `${j.nombre}(Nv.${j.nivel})`));
-    chequearSiguientePelea();
-  });
-  */
 
   // Procesar final del combate y guardar XP
   socket.on('pelea_terminada', async (datos: { ganador: string }) => {
