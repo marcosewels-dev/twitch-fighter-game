@@ -2,9 +2,20 @@ import { io } from 'socket.io-client';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
 
+// 🟢 CONSTANTE LOCAL ANTI-CACHÉ
+const VERSION_LOCAL = 1.1; 
+
 const socket = io(BACKEND_URL, {
   transports: ['websocket', 'polling']
 }); 
+
+// 🟢 ESCUCHADOR MAESTRO: Si la versión del server cambia, OBS se auto-reinicia solo
+socket.on('chequear_version', (datos: { version: number }) => {
+  if (datos.version !== VERSION_LOCAL) {
+    console.log("🛠️ ¡Nueva actualización detectada! Forzando recarga de OBS...");
+    window.location.reload();
+  }
+});
 
 const canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
@@ -196,7 +207,6 @@ class Luchador {
     this.x += this.vx;
     this.vx *= this.friccion;
 
-    // 🛠️ BUG DE AUTOCUMPLETADO ARREGLADO (Adiós a la variable 'graves' fantasma)
     if (this.x < 50) this.x = 50;
     if (this.x > 1180) this.x = 1180;
 
@@ -365,7 +375,6 @@ function gameLoop() {
     if (intensidadTemblor < 0.5) intensidadTemblor = 0;
   }
 
-  // RECLUTAMIENTO VISUAL
   if (reclutamientoDungeon) {
     ctx.fillStyle = 'rgba(145, 70, 255, 0.2)';
     ctx.fillRect(50, 30, 1180, 70);
@@ -380,7 +389,6 @@ function gameLoop() {
     });
   }
 
-  // COMBATE COOPERATIVO DE LA DUNGEON
   else if (modoDungeonActivo && monstruoActual) {
     ctx.fillStyle = '#f1c40f';
     ctx.font = 'bold 24px Arial';
@@ -470,7 +478,6 @@ function gameLoop() {
     }
   }
 
-  // ARENA 1V1 ESTÁNDAR
   else if (peleaActiva && p1 && p2) {
     p1.direccionMira = p1.x < p2.x ? 'derecha' : 'izquierda';
     p2.direccionMira = p2.x < p1.x ? 'derecha' : 'izquierda';
