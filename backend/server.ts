@@ -8,7 +8,9 @@ import mongoose from 'mongoose';
 const app = express();
 app.use(cors());
 
-// 🛡️ MIDDLEWARE ANTI-CACHÉ GLOBAL
+// 🛡️ CONSTANTE DE CONTROL DE VERSIONES ANTI-CACHÉ
+const VERSION_JUEGO = 1.1; // 🟢 Si haces cambios en el front, sube esto a 1.2, 1.3, etc.
+
 app.use((req, res, next) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
   res.set('Pragma', 'no-cache');
@@ -62,7 +64,6 @@ mongoose.connect(MONGO_URI)
   .then(() => console.log('✅ Conectado con éxito a MongoDB Atlas'))
   .catch(err => console.error('❌ Error al conectar a MongoDB:', err));
 
-// Esquema de base de datos completo para las 5 clases
 const jugadorSchema = new mongoose.Schema({
   twitchId: { type: String, required: true, unique: true },
   username: { type: String, required: true },
@@ -171,7 +172,6 @@ twitchClient.on('message', async (channel, tags, message, self) => {
     return;
   }
 
-  // COMANDO: !DUNGEON (Inicia reclutamiento prioritario)
   if (msg === '!dungeon') {
     if (dungeonEnCurso || dungeonFaseReclutamiento || peleaEnCurso) {
       enviarMensajeChat(channel, `@${username}, la arena se encuentra ocupada con otra actividad. Espera un momento.`);
@@ -190,7 +190,6 @@ twitchClient.on('message', async (channel, tags, message, self) => {
     return;
   }
 
-  // COMANDO: !ENTRAR (Unirse al asalto cooperativo)
   if (msg === '!entrar') {
     if (!dungeonFaseReclutamiento) {
       enviarMensajeChat(channel, `@${username}, no hay ninguna expedición reclutando en este momento. Escribe !dungeon para abrir una.`);
@@ -231,7 +230,6 @@ twitchClient.on('message', async (channel, tags, message, self) => {
     return;
   }
 
-  // COMANDO: !LUCHAR (Guardado en cola secundaria con prioridad para Dungeons)
   if (msg.startsWith('!luchar')) {
     if (colaEspera.some(j => j.twitchId === twitchId)) {
       enviarMensajeChat(channel, `@${username}, ya estás en la cola de espera de la arena.`);
@@ -277,7 +275,6 @@ twitchClient.on('message', async (channel, tags, message, self) => {
     }
   }
 
-  // COMANDO: !STATS
   else if (msg === '!stats' || msg === '!perfil') {
     try {
       const perfil = await Jugador.findOne({ twitchId });
@@ -298,7 +295,6 @@ twitchClient.on('message', async (channel, tags, message, self) => {
     }
   }
 
-  // COMANDO: !CLASE
   else if (msg.startsWith('!clase') || msg.startsWith('!rol')) {
     const partes = msg.split(' ');
     const claseElegida = partes[1];
@@ -332,7 +328,6 @@ twitchClient.on('message', async (channel, tags, message, self) => {
     }
   }
 
-  // COMANDO: !RANKING
   else if (msg === '!ranking' || msg === '!top') {
     try {
       const jugadores = await Jugador.find();
@@ -372,7 +367,7 @@ function iniciarBatallaDungeon() {
   }
 
   dungeonEnCurso = true;
-  peleaEnCurso = false; // 🟢 BLINDAJE: Apagamos candado de duelos normales para evitar bloqueos cruzados
+  peleaEnCurso = false; 
 
   const sumaNiveles = grupoDungeon.reduce((acc, h) => acc + h.nivel, 0);
   const nivelMedio = sumaNiveles / grupoDungeon.length;
@@ -409,11 +404,12 @@ function chequearSiguientePelea() {
   });
 }
 
-// ==========================================
-// 🔌 MANEJADOR SOCKETS IO DISPATCHER
-// ==========================================
 io.on('connection', (socket) => {
   console.log('Frontend conectado.');
+  
+  // 🟢 ENVIAR COMPROBACIÓN DE VERSIÓN AL OBS NADA MÁS CONECTAR
+  socket.emit('chequear_version', { version: VERSION_JUEGO });
+
   socket.emit('actualizar_cola', colaEspera.map(j => `${j.nombre}(Nv.${j.nivel})`));
 
   socket.on('dungeon_terminada', async (datos: { victoria: boolean; fasesSuperadas: number }) => {
@@ -455,14 +451,13 @@ io.on('connection', (socket) => {
     io.emit('dungeon_limpiar_interfaz');
     grupoDungeon = [];
     dungeonEnCurso = false;
-    peleaEnCurso = false; // 🟢 Liberamos la arena para la siguiente actividad
+    peleaEnCurso = false; 
 
     setTimeout(() => {
       chequearSiguientePelea();
     }, 5000);
   });
 
-  // Procesar final del combate 1v1 y guardar XP
   socket.on('pelea_terminada', async (datos: { ganador: string }) => {
     if (!luchadorActual1 || !luchadorActual2) return;
 
@@ -544,7 +539,7 @@ io.on('connection', (socket) => {
 
     luchadorActual1 = null;
     luchadorActual2 = null;
-    peleaEnCurso = false; // 🟢 Liberamos la arena limpiamente
+    peleaEnCurso = false; 
 
     setTimeout(() => {
       chequearSiguientePelea();
