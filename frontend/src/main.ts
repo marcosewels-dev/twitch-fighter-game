@@ -214,7 +214,7 @@ socket.on('pelea_terminada_confirmada', () => {
     p1 = null;
     p2 = null;
     limpiezaTimer = null;
-  }, 5000); // 👈 5000 ms = 5 segundos de gracia con el ganador en pantalla
+  }, 5000); // 5 segundos de gracia con el ganador en pantalla
 });
 
 function spawnearParticulas(x: number, y: number, color: string) {
@@ -229,8 +229,8 @@ function gameLoop() {
 
   ctx.save();
   if (intensidadTemblor > 0) {
-    const dx = (Math.random() - 0.5) * intensityTemblor; // Ajustado a intensidadTemblor
-    const dy = (Math.random() - 0.5) * intensityTemblor; // Ajustado a intensidadTemblor
+    const dx = (Math.random() - 0.5) * intensidadTemblor; // Corregido: ¡ya no usa la 'y'!
+    const dy = (Math.random() - 0.5) * intensidadTemblor; // Corregido: ¡ya no usa la 'y'!
     ctx.translate(dx, dy);
     intensidadTemblor *= 0.85;
     if (intensidadTemblor < 0.5) intensidadTemblor = 0;
