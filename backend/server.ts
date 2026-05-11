@@ -103,7 +103,6 @@ const TWITCH_CHANNEL = process.env.TWITCH_CHANNEL || 'EL_CANAL_DE_TU_AMIGO';
 const TWITCH_BOT_USER = process.env.TWITCH_BOT_USER; // Nombre de la cuenta bot
 const TWITCH_OAUTH_TOKEN = process.env.TWITCH_OAUTH_TOKEN; // oauth:xxxxxxxxx
 
-// Configuramos las opciones del cliente. Si no hay credenciales, se conectará en modo lectura (sin caerse).
 const tmiOptions: any = {
   options: { debug: true },
   channels: [ TWITCH_CHANNEL ]
@@ -119,10 +118,10 @@ if (TWITCH_BOT_USER && TWITCH_OAUTH_TOKEN) {
 const twitchClient = new tmi.Client(tmiOptions);
 twitchClient.connect().catch(console.error);
 
-// Función auxiliar para enviar mensajes de forma segura sin romper el servidor
+// Función auxiliar para enviar mensajes de forma segura
 function enviarMensajeChat(canal: string, mensaje: string) {
   if (!TWITCH_BOT_USER || !TWITCH_OAUTH_TOKEN) {
-    console.log(`⚠️ [CHAT SIMULADO - Sin Credenciales]: ${mensaje}`);
+    console.log(`⚠️ [CHAT SIMULADO]: ${mensaje}`);
     return;
   }
   twitchClient.say(canal, mensaje).catch(err => {
@@ -352,6 +351,9 @@ io.on('connection', (socket) => {
     } catch (error) {
       console.error('Error al actualizar estadísticas:', error);
     }
+
+    // Le avisamos al frontend de que hemos registrado el final para que limpie la pantalla
+    io.emit('pelea_terminada_confirmada');
 
     luchadorActual1 = null;
     luchadorActual2 = null;
