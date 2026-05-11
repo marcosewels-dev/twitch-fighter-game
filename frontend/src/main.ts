@@ -11,6 +11,7 @@ const ctx = canvas.getContext('2d')!;
 
 type TipoLuchador = 'guerrero' | 'ninja' | 'mago' | 'clerigo' | 'cazador';
 
+// --- Partículas de Impacto ---
 class Particula {
   x: number; y: number; vx: number; vy: number;
   color: string; vida = 20;
@@ -36,6 +37,7 @@ class Particula {
   }
 }
 
+// --- Clase Luchador ---
 class Luchador {
   x: number;
   y: number;
@@ -136,6 +138,7 @@ class Luchador {
   }
 
   dibujar(ctx: CanvasRenderingContext2D) {
+    if (this.vida <= 0) return; // No dibujar héroes caídos
     ctx.save();
     
     const centroX = this.x + this.ancho / 2;
@@ -179,6 +182,7 @@ class Luchador {
   }
 
   actualizar() {
+    if (this.vida <= 0) return;
     if (this.cooldownAtaque > 0) this.cooldownAtaque--;
 
     this.vy += this.gravedad;
@@ -205,13 +209,79 @@ class Luchador {
   }
 
   saltar() {
-    if (this.enSuelo) {
+    if (this.enSuelo && this.vida > 0) {
       this.vy = -11;
       this.enSuelo = false;
     }
   }
 }
 
+// 🟢 CLASE NUEVA: Enemigos de la Mazmorra
+class Monstruo {
+  x: number; y: number; ancho = 80; alto = 80;
+  nombre: string; emoji: string; color: string;
+  vidaMax: number; vida: number;
+  danoMin: number; danoMax: number;
+  cooldownAtaque = 0;
+
+  constructor(x: number, y: number, fase: number, nivelMedio: number) {
+    this.x = x;
+    this.y = y;
+
+    // Ajuste express a 3 fases escalando según el nivel medio del grupo
+    if (fase === 0) {
+      this.nombre = "👻 Esbirro Espectral";
+      this.emoji = "👻";
+      this.color = "#7f8c8d";
+      this.vidaMax = Math.floor(180 * (1 + nivelMedio * 0.04));
+      this.danoMin = 4; this.danoMax = 8;
+    } else if (fase === 1) {
+      this.nombre = "👹 Miniboss Ogro";
+      this.emoji = "👹";
+      this.color = "#d35400";
+      this.ancho = 100; this.alto = 100;
+      this.vidaMax = Math.floor(350 * (1 + nivelMedio * 0.05));
+      this.danoMin = 8; this.danoMax = 14;
+    } else {
+      this.nombre = "🐉 JEFE SUPREMO DRAGÓN";
+      this.emoji = "🐉";
+      this.color = "#c0392b";
+      this.ancho = 140; this.alto = 140;
+      this.vidaMax = Math.floor(700 * (1 + nivelMedio * 0.06));
+      this.danoMin = 12; this.danoMax = 22;
+    }
+    this.vida = this.vidaMax;
+  }
+
+  dibujar(ctx: CanvasRenderingContext2D) {
+    if (this.vida <= 0) return;
+    ctx.save();
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = this.color;
+    ctx.font = `${this.ancho - 10}px Arial`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(this.emoji, this.x + this.ancho / 2, this.y + this.alto / 2);
+    ctx.restore();
+
+    // Barra de salud gigante para el Boss
+    const centroX = this.x + this.ancho / 2;
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 14px Arial';
+    ctx.textAlign = 'center';
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 3;
+    ctx.strokeText(this.nombre, centroX, this.y - 20);
+    ctx.fillText(this.nombre, centroX, this.y - 20);
+
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(centroX - 60, this.y - 10, 120, 8);
+    ctx.fillStyle = this.color;
+    ctx.fillRect(centroX - 60, this.y - 10, 120 * (this.vida / this.vidaMax), 8);
+  }
+}
+
+// --- Estado Global ---
 let p1: Luchador | null = null;
 let p2: Luchador | null = null;
 let peleaActiva = false;
@@ -220,14 +290,24 @@ let particulas: Particula[] = [];
 let intensidadTemblor = 0;
 let limpiezaTimer: number | null = null;
 
+// 🟢 Variables de estado globales para las Dungeons
+let modoDungeonActivo = false;
+let reclutamientoDungeon = false;
+let tiempoReclutamientoRestante = 0;
+let grupoDungeonHéroes: Luchador[] = [];
+let monstruoActual: Monstruo | null = null;
+let faseDungeonActual = 0; 
+let nivelMedioDungeon = 1;
+let finDungeonEnviado = false;
+
+// --- Recepción de Eventos de Servidor (1v1) ---
 socket.on('iniciar_pelea', (datos: { p1: string; claseP1: TipoLuchador; nivelP1: number; p2: string; claseP2: TipoLuchador; nivelP2: number }) => {
   if (limpiezaTimer) {
     clearTimeout(limpiezaTimer);
     limpiezaTimer = null;
   }
-  
-  p1 = null;
-  p2 = null;
+  modoDungeonActivo = false;
+  reclutamientoDungeon = false;
   
   p1 = new Luchador(150, 600, datos.p1, datos.claseP1, datos.nivelP1);
   p2 = new Luchador(1080, 600, datos.p2, datos.claseP2, datos.nivelP2);
@@ -238,9 +318,43 @@ socket.on('iniciar_pelea', (datos: { p1: string; claseP1: TipoLuchador; nivelP1:
 
 socket.on('pelea_terminada_confirmada', () => {
   limpiezaTimer = setTimeout(() => {
-    p1 = null;
-    p2 = null;
+    p1 = null; p2 = null;
     limpiezaTimer = null;
+  }, 5000);
+});
+
+// --- 🟢 RECEPCIÓN DE EVENTOS NUEVOS: MAZMORRAS COOPERATIVAS ---
+socket.on('dungeon_reclutamiento_abierto', (datos: { tiempo: number }) => {
+  p1 = null; p2 = null; peleaActiva = false;
+  reclutamientoDungeon = true;
+  modoDungeonActivo = false;
+  tiempoReclutamientoRestante = datos.tiempo;
+  grupoDungeonHéroes = [];
+});
+
+socket.on('dungeon_actualizar_grupo', (lista: { nombre: string; clase: TipoLuchador; nivel: number }[]) => {
+  // Posicionamos escalonadamente a los miembros en el flanco izquierdo
+  grupoDungeonHéroes = lista.map((h, i) => new Luchador(80 + i * 65, 600, h.nombre, h.clase, h.nivel));
+});
+
+socket.on('dungeon_iniciar', (datos: { jugadores: any[]; nivelMedio: number }) => {
+  reclutamientoDungeon = false;
+  modoDungeonActivo = true;
+  faseDungeonActual = 0;
+  finDungeonEnviado = false;
+  nivelMedioDungeon = datos.nivelMedio;
+  
+  // Re-instanciar héroes listos para cargar hacia el centro
+  grupoDungeonHéroes = datos.jugadores.map((h, i) => new Luchador(100 + i * 65, 600, h.nombre, h.clase, h.nivel));
+  // Instanciar primer esbirro express en el centro derecho
+  monstruoActual = new Monstruo(850, 540, 0, nivelMedioDungeon);
+});
+
+socket.on('dungeon_limpiar_interfaz', () => {
+  limpiezaTimer = setTimeout(() => {
+    grupoDungeonHéroes = [];
+    monstruoActual = null;
+    modoDungeonActivo = false;
   }, 5000);
 });
 
@@ -258,23 +372,21 @@ function calcularDanoEfectivo(atacante: Luchador, defensor: Luchador): { dano: n
     danoBase = Math.floor(danoBase * 1.5);
     textoEspecial = "🎯 ¡CRÍTICO!";
   }
-
   if (defensor.tipo === 'ninja' && Math.random() < 0.20) {
     return { dano: 0, textoEspecial: "💨 ¡ESQUIVADO!" };
   }
-
   if (defensor.tipo === 'guerrero' && Math.random() < 0.15) {
     danoBase = Math.floor(danoBase * 0.5);
     textoEspecial = "🛡️ ¡BLOQUEADO!";
   }
-
   return { dano: danoBase, textoEspecial };
 }
 
+// --- Game Loop ---
 function gameLoop() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-
   ctx.save();
+  
   if (intensidadTemblor > 0) {
     const dx = (Math.random() - 0.5) * intensidadTemblor;
     const dy = (Math.random() - 0.5) * intensidadTemblor;
@@ -283,107 +395,26 @@ function gameLoop() {
     if (intensidadTemblor < 0.5) intensidadTemblor = 0;
   }
 
-  if (peleaActiva && p1 && p2) {
-    p1.direccionMira = p1.x < p2.x ? 'derecha' : 'izquierda';
-    p2.direccionMira = p2.x < p1.x ? 'derecha' : 'izquierda';
-
-    if (Math.random() < 0.015) p1.saltar();
-    if (Math.random() < 0.015) p2.saltar();
-
-    const distancia = Math.abs(p1.x - p2.x);
-
-    if (distancia > p1.rangoAtaque) {
-      if (p1.x < p2.x) p1.x += p1.velocidad;
-      else p1.x -= p1.velocidad;
-    }
-
-    if (distancia > p2.rangoAtaque) {
-      if (p2.x > p1.x) p2.x -= p2.velocidad;
-      else p2.x += p2.velocidad;
-    }
-
-    if (distancia <= p1.rangoAtaque && p1.cooldownAtaque === 0) {
-      p1.atacar();
-      const resultado = calcularDanoEfectivo(p1, p2);
-      p2.vida -= resultado.dano;
-      
-      if (p1.tipo === 'ninja') p1.cooldownAtaque = 12;       
-      else if (p1.tipo === 'guerrero') p1.cooldownAtaque = 32; 
-      else if (p1.tipo === 'cazador') p1.cooldownAtaque = 20;   
-      else if (p1.tipo === 'clerigo') {
-        p1.cooldownAtaque = 38;
-        const esCriticoSalud = p1.vida < (p1.vidaMax * 0.3);
-        p1.vida = Math.min(p1.vidaMax, p1.vida + (esCriticoSalud ? 10 : 5));
-      } else p1.cooldownAtaque = 38;                            
-      
-      p2.vx = p1.tipo === 'mago' || p1.tipo === 'cazador' ? 6 : 12;
-      intensidadTemblor = p1.tipo === 'guerrero' || p1.tipo === 'clerigo' ? 6 : 3;
-      spawnearParticulas(p2.x + 22, p2.y + 22, p1.colorTematico);
-    }
-
-    if (distancia <= p2.rangoAtaque && p2.cooldownAtaque === 0) {
-      p2.atacar();
-      const resultado = calcularDanoEfectivo(p2, p1);
-      p1.vida -= resultado.dano;
-      
-      if (p2.tipo === 'ninja') p2.cooldownAtaque = 12;
-      else if (p2.tipo === 'guerrero') p2.cooldownAtaque = 32;
-      else if (p2.tipo === 'cazador') p2.cooldownAtaque = 20;
-      else if (p2.tipo === 'clerigo') {
-        p2.cooldownAtaque = 38;
-        const esCriticoSalud = p2.vida < (p2.vidaMax * 0.3);
-        p2.vida = Math.min(p2.vidaMax, p2.vida + (esCriticoSalud ? 10 : 5));
-      } else p2.cooldownAtaque = 38;
-      
-      p1.vx = p2.tipo === 'mago' || p2.tipo === 'cazador' ? -6 : -12;
-      intensidadTemblor = p2.tipo === 'guerrero' || p2.tipo === 'clerigo' ? 6 : 3;
-      spawnearParticulas(p1.x + 22, p1.y + 22, p2.colorTematico);
-    }
-
-    p1.vida = Math.max(0, p1.vida);
-    p2.vida = Math.max(0, p2.vida);
-
-    p1.actualizar();
-    p2.actualizar();
-
-    p1.dibujar(ctx);
-    p2.dibujar(ctx);
-
-    if (p1.vida <= 0 || p2.vida <= 0) {
-      peleaActiva = false;
-      const ganador = p1.vida > 0 ? p1.nombre : p2.nombre;
-      intensidadTemblor = 12;
-      
-      if (!finDePeleaEnviado) {
-        finDePeleaEnviado = true;
-        socket.emit('pelea_terminada', { ganador });
-      }
-    }
-  } else if (p1 && p2) {
-    p1.actualizar();
-    p2.actualizar();
-    p1.dibujar(ctx);
-    p2.dibujar(ctx);
-
-    const ganador = p1.vida > 0 ? p1.nombre : p2.nombre;
-    
+  // LÓGICA 1: Modo Reclutamiento de Incursiones
+  if (reclutamientoDungeon) {
+    ctx.fillStyle = 'rgba(145, 70, 255, 0.15)';
+    ctx.fillRect(100, 40, 1080, 80);
     ctx.fillStyle = '#fff';
-    ctx.font = 'bold 36px Arial';
+    ctx.font = 'bold 24px Arial';
     ctx.textAlign = 'center';
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = 5;
-    ctx.strokeText(`¡GANADOR: ${ganador}!`, canvas.width / 2, 400);
-    ctx.fillText(`¡GANADOR: ${ganador}!`, canvas.width / 2, 400);
+    ctx.fillText(`🏰 FORMANDO GRUPO DE INMOLACIÓN (Falta !entrar en el chat) ⏳`, canvas.width / 2, 75);
+
+    // Pintar avatares en la antesala de espera
+    grupoDungeonHéroes.forEach(h => {
+      h.actualizar();
+      h.dibujar(ctx);
+    });
   }
 
-  particulas = particulas.filter(p => p.vida > 0);
-  particulas.forEach(p => {
-    p.actualizar();
-    p.dibujar(ctx);
-  });
-
-  ctx.restore();
-  requestAnimationFrame(gameLoop);
-}
-
-gameLoop();
+  // LÓGICA 2: Modo Incursión de Mazmorra Activo (3 Fases)
+  else if (modoDungeonActivo && monstruoActual) {
+    // Info superior de la expedición
+    ctx.fillStyle = '#f1c40f';
+    ctx.font = 'bold 26px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText(`🐲 INCURSIÓN EXPRESS: FASE ${faseDungeonActual + 1} / 3 ⚔️`, canvas.width / 2
