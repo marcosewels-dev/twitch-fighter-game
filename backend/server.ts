@@ -13,7 +13,6 @@ app.get('/api/ranking', async (req, res) => {
   try {
     const jugadores = await Jugador.find();
     
-    // Calculamos las victorias totales sumando el rendimiento de todas sus clases
     const ranking = jugadores.map(j => {
       const victoriasTotales = (j.guerrero?.victorias || 0) + 
                                (j.ninja?.victorias || 0) + 
@@ -24,7 +23,7 @@ app.get('/api/ranking', async (req, res) => {
         claseActual: j.claseActual
       };
     })
-    .filter(j => j.victorias > 0) // Solo listamos jugadores con victorias
+    .filter(j => j.victorias > 0) 
     .sort((a, b) => b.victorias - a.victorias)
     .slice(0, 10);
 
@@ -38,7 +37,7 @@ app.get('/api/ranking', async (req, res) => {
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: ["http://localhost:5173", "http://127.0.0.1:5173", "*"], // Permitimos local y Vercel en producción
+    origin: ["http://localhost:5173", "http://127.0.0.1:5173", "*"], 
     methods: ["GET", "POST"],
     credentials: true
   }
@@ -53,7 +52,7 @@ mongoose.connect(MONGO_URI)
   .then(() => console.log('✅ Conectado con éxito a MongoDB Atlas'))
   .catch(err => console.error('❌ Error al conectar a MongoDB:', err));
 
-// Esquema de base de datos
+// Esquema de base de datos estable
 const jugadorSchema = new mongoose.Schema({
   twitchId: { type: String, required: true, unique: true },
   username: { type: String, required: true },
@@ -100,8 +99,8 @@ let luchadorActual2: JugadorPelea | null = null;
 // 🔌 CONEXIÓN CONFIGURABLE A TWITCH
 // ==========================================
 const TWITCH_CHANNEL = process.env.TWITCH_CHANNEL || 'EL_CANAL_DE_TU_AMIGO';
-const TWITCH_BOT_USER = process.env.TWITCH_BOT_USER; // Nombre de la cuenta bot
-const TWITCH_OAUTH_TOKEN = process.env.TWITCH_OAUTH_TOKEN; // oauth:xxxxxxxxx
+const TWITCH_BOT_USER = process.env.TWITCH_BOT_USER; 
+const TWITCH_OAUTH_TOKEN = process.env.TWITCH_OAUTH_TOKEN; 
 
 const tmiOptions: any = {
   options: { debug: true },
@@ -118,7 +117,6 @@ if (TWITCH_BOT_USER && TWITCH_OAUTH_TOKEN) {
 const twitchClient = new tmi.Client(tmiOptions);
 twitchClient.connect().catch(console.error);
 
-// Función auxiliar para enviar mensajes de forma segura
 function enviarMensajeChat(canal: string, mensaje: string) {
   if (!TWITCH_BOT_USER || !TWITCH_OAUTH_TOKEN) {
     console.log(`⚠️ [CHAT SIMULADO]: ${mensaje}`);
@@ -142,7 +140,7 @@ twitchClient.on('message', async (channel, tags, message, self) => {
   if (msg === '!comandos' || msg === '!ayuda' || msg === '!arena') {
     enviarMensajeChat(
       channel, 
-      `🎮 [ARENA COMMANDS] ⚔️ !luchar [clase] (Únete con guerrero, ninja o mago) | 👤 !stats (Mira tu nivel y récord) | 🔄 !clase [rol] (Cambia tu clase activa) | 🏆 !ranking (Top 5 del canal)`
+      `🎮 [ARENA COMMANDS] ⚔️ !luchar [clase] (Clases: guerrero, ninja, mago) | 👤 !stats (Mira tu nivel y récord) | 🔄 !clase [rol] (Cambia tu clase activa) | 🏆 !ranking (Top 5 del canal)`
     );
     return;
   }
@@ -168,7 +166,6 @@ twitchClient.on('message', async (channel, tags, message, self) => {
       await perfil.save();
     }
 
-    // Si escribe una clase válida al unirse y es distinta, la cambiamos
     if (clasesValidas.includes(claseElegida) && perfil.claseActual !== claseElegida) {
       perfil.claseActual = claseElegida;
       await perfil.save();
@@ -229,7 +226,6 @@ twitchClient.on('message', async (channel, tags, message, self) => {
       let perfil = await Jugador.findOne({ twitchId });
       
       if (!perfil) {
-        // Si no tiene perfil, lo creamos directamente con esa clase
         perfil = new Jugador({
           twitchId,
           username,
