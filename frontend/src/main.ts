@@ -191,14 +191,30 @@ let peleaActiva = false;
 let finDePeleaEnviado = false;
 let particulas: Particula[] = [];
 let intensidadTemblor = 0;
+let limpiezaTimer: number | null = null; // Guardará el temporizador de desaparición
 
 // --- Recepción de Eventos de Servidor ---
 socket.on('iniciar_pelea', (datos: { p1: string; claseP1: TipoLuchador; p2: string; claseP2: TipoLuchador }) => {
+  // Si había un temporizador de limpieza activo de la pelea anterior, lo cancelamos
+  if (limpiezaTimer) {
+    clearTimeout(limpiezaTimer);
+    limpiezaTimer = null;
+  }
+  
   p1 = new Luchador(150, 600, datos.p1, datos.claseP1);
   p2 = new Luchador(1080, 600, datos.p2, datos.claseP2);
   peleaActiva = true;
   finDePeleaEnviado = false;
   particulas = [];
+});
+
+// Cuando la pelea termina oficialmente, programamos que todo desaparezca en 5 segundos
+socket.on('pelea_terminada_confirmada', () => {
+  limpiezaTimer = setTimeout(() => {
+    p1 = null;
+    p2 = null;
+    limpiezaTimer = null;
+  }, 5000); // 👈 5000 ms = 5 segundos de gracia con el ganador en pantalla
 });
 
 function spawnearParticulas(x: number, y: number, color: string) {
@@ -213,8 +229,8 @@ function gameLoop() {
 
   ctx.save();
   if (intensidadTemblor > 0) {
-    const dx = (Math.random() - 0.5) * intensidadTemblor;
-    const dy = (Math.random() - 0.5) * intensidadTemblor;
+    const dx = (Math.random() - 0.5) * intensityTemblor; // Ajustado a intensidadTemblor
+    const dy = (Math.random() - 0.5) * intensityTemblor; // Ajustado a intensidadTemblor
     ctx.translate(dx, dy);
     intensidadTemblor *= 0.85;
     if (intensidadTemblor < 0.5) intensidadTemblor = 0;
@@ -297,10 +313,7 @@ function gameLoop() {
     ctx.strokeText(`¡GANADOR: ${ganador}!`, canvas.width / 2, 400);
     ctx.fillText(`¡GANADOR: ${ganador}!`, canvas.width / 2, 400);
   } else {
-    ctx.fillStyle = 'rgba(255,255,255,0.4)';
-    ctx.font = '16px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText('Esperando gladiadores en la arena...', canvas.width / 2, 500);
+    // Cuando no hay combate, el canvas permanece 100% limpio y transparente para OBS
   }
 
   particulas = particulas.filter(p => p.vida > 0);
