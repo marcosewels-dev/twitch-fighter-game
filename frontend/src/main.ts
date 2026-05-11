@@ -1,6 +1,5 @@
 import { io } from 'socket.io-client';
 
-// 🔌 Conexión inteligente a través de variables de entorno de Vite
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
 
 const socket = io(BACKEND_URL, {
@@ -12,7 +11,6 @@ const ctx = canvas.getContext('2d')!;
 
 type TipoLuchador = 'guerrero' | 'ninja' | 'mago' | 'clerigo' | 'cazador';
 
-// --- Partículas de Impacto ---
 class Particula {
   x: number; y: number; vx: number; vy: number;
   color: string; vida = 20;
@@ -38,7 +36,6 @@ class Particula {
   }
 }
 
-// --- Clase Luchador ---
 class Luchador {
   x: number;
   y: number;
@@ -110,7 +107,7 @@ class Luchador {
       this.rangoAtaque = 65;
       this.danoMin = 8;
       this.danoMax = 14;
-    } else { 
+    } else if (tipo === 'cazador') { 
       this.emoji = '🏹';
       this.armaEmoji = '🏹';
       this.colorTematico = '#27ae60';
@@ -119,13 +116,21 @@ class Luchador {
       this.rangoAtaque = 210; 
       this.danoMin = 8;        
       this.danoMax = 12;
+    } else {
+      this.emoji = '⚔️';
+      this.armaEmoji = '🗡️';
+      this.colorTematico = '#95a5a6';
+      this.vidaMax = 100;
+      this.velocidad = 3.0;
+      this.rangoAtaque = 60;
+      this.danoMin = 8;
+      this.danoMax = 12;
     }
 
-    // Escalado RPG por nivel
     const nivelesExtra = Math.max(0, this.nivel - 1);
-    this.vidaMax = Math.floor(this.vidaMax * (1 + nivelesExtra * 0.02));
-    this.danoMin = Math.floor(this.danoMin * (1 + nivelesExtra * 0.015));
-    this.danoMax = Math.floor(this.danoMax * (1 + nivelesExtra * 0.015));
+    this.vidaMax = Math.floor(this.vidaMax * (1 + nivelesExtra * 0.01));
+    this.danoMin = Math.floor(this.danoMin * (1 + nivelesExtra * 0.007));
+    this.danoMax = Math.floor(this.danoMax * (1 + nivelesExtra * 0.007));
 
     this.vida = this.vidaMax;
   }
@@ -143,12 +148,10 @@ class Luchador {
 
     ctx.shadowBlur = 12;
     ctx.shadowColor = this.colorTematico;
-
     ctx.font = '40px Arial'; 
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(this.emoji, 0, 0);
-
     ctx.shadowBlur = 0;
 
     ctx.save();
@@ -169,7 +172,6 @@ class Luchador {
     ctx.strokeText(etiquetaNombre, centroX, this.y - 25);
     ctx.fillText(etiquetaNombre, centroX, this.y - 25);
 
-    // Barra de Vida
     ctx.fillStyle = 'rgba(0,0,0,0.6)';
     ctx.fillRect(centroX - 30, this.y - 15, 60, 6);
     ctx.fillStyle = this.colorTematico;
@@ -210,7 +212,6 @@ class Luchador {
   }
 }
 
-// --- Estado Global ---
 let p1: Luchador | null = null;
 let p2: Luchador | null = null;
 let peleaActiva = false;
@@ -219,12 +220,14 @@ let particulas: Particula[] = [];
 let intensidadTemblor = 0;
 let limpiezaTimer: number | null = null;
 
-// --- Recepción de Eventos de Servidor ---
 socket.on('iniciar_pelea', (datos: { p1: string; claseP1: TipoLuchador; nivelP1: number; p2: string; claseP2: TipoLuchador; nivelP2: number }) => {
   if (limpiezaTimer) {
     clearTimeout(limpiezaTimer);
     limpiezaTimer = null;
   }
+  
+  p1 = null;
+  p2 = null;
   
   p1 = new Luchador(150, 600, datos.p1, datos.claseP1, datos.nivelP1);
   p2 = new Luchador(1080, 600, datos.p2, datos.claseP2, datos.nivelP2);
@@ -247,24 +250,19 @@ function spawnearParticulas(x: number, y: number, color: string) {
   }
 }
 
-// 🟢 FUNCIÓN AUXILIAR PARA CALCULAR EL DAÑO FINAL CONSIDERANDO ESQUIVAS, CRÍTICOS Y BLOQUEOS
 function calcularDanoEfectivo(atacante: Luchador, defensor: Luchador): { dano: number; textoEspecial: string } {
-  // 1. Calcular daño base aleatorio del atacante
   let danoBase = Math.floor(Math.random() * (atacante.danoMax - atacante.danoMin + 1)) + atacante.danoMin;
   let textoEspecial = "";
 
-  // Mecánica del Cazador: 20% de probabilidad de asestar un golpe Crítico (x1.5 daño)
   if (atacante.tipo === 'cazador' && Math.random() < 0.20) {
     danoBase = Math.floor(danoBase * 1.5);
     textoEspecial = "🎯 ¡CRÍTICO!";
   }
 
-  // Mecánica del Ninja: 20% de probabilidad de esquivar por completo el ataque recibido
   if (defensor.tipo === 'ninja' && Math.random() < 0.20) {
     return { dano: 0, textoEspecial: "💨 ¡ESQUIVADO!" };
   }
 
-  // Mecánica del Guerrero: 15% de probabilidad de bloquear reduciendo el daño a la mitad
   if (defensor.tipo === 'guerrero' && Math.random() < 0.15) {
     danoBase = Math.floor(danoBase * 0.5);
     textoEspecial = "🛡️ ¡BLOQUEADO!";
@@ -273,7 +271,6 @@ function calcularDanoEfectivo(atacante: Luchador, defensor: Luchador): { dano: n
   return { dano: danoBase, textoEspecial };
 }
 
-// --- Game Loop ---
 function gameLoop() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -305,11 +302,8 @@ function gameLoop() {
       else p2.x += p2.velocidad;
     }
 
-    // Ataques de P1
     if (distancia <= p1.rangoAtaque && p1.cooldownAtaque === 0) {
       p1.atacar();
-      
-      // 🧮 Calculamos el daño usando el nuevo sistema de pasivas equilibradas
       const resultado = calcularDanoEfectivo(p1, p2);
       p2.vida -= resultado.dano;
       
@@ -318,26 +312,17 @@ function gameLoop() {
       else if (p1.tipo === 'cazador') p1.cooldownAtaque = 20;   
       else if (p1.tipo === 'clerigo') {
         p1.cooldownAtaque = 38;
-        // Mecánica del Clérigo: Se cura +5, pero si tiene menos del 30% de vida, se cura +10
         const esCriticoSalud = p1.vida < (p1.vidaMax * 0.3);
         p1.vida = Math.min(p1.vidaMax, p1.vida + (esCriticoSalud ? 10 : 5));
-        resultado.textoEspecial = esCriticoSalud ? "✨ ¡GRAN REZO!" : "✨ SANACIÓN";
       } else p1.cooldownAtaque = 38;                            
       
       p2.vx = p1.tipo === 'mago' || p1.tipo === 'cazador' ? 6 : 12;
       intensidadTemblor = p1.tipo === 'guerrero' || p1.tipo === 'clerigo' ? 6 : 3;
       spawnearParticulas(p2.x + 22, p2.y + 22, p1.colorTematico);
-
-      // Si hay un evento especial (Crítico, Esquiva, Bloqueo), lo mostramos en consola o lo procesamos
-      if (resultado.textoEspecial) {
-        console.log(`[COMBATE] ${p1.nombre}: ${resultado.textoEspecial} (${resultado.dano} DMG)`);
-      }
     }
 
-    // Ataques de P2
     if (distancia <= p2.rangoAtaque && p2.cooldownAtaque === 0) {
       p2.atacar();
-      
       const resultado = calcularDanoEfectivo(p2, p1);
       p1.vida -= resultado.dano;
       
@@ -348,16 +333,11 @@ function gameLoop() {
         p2.cooldownAtaque = 38;
         const esCriticoSalud = p2.vida < (p2.vidaMax * 0.3);
         p2.vida = Math.min(p2.vidaMax, p2.vida + (esCriticoSalud ? 10 : 5));
-        resultado.textoEspecial = esCriticoSalud ? "✨ ¡GRAN REZO!" : "✨ SANACIÓN";
       } else p2.cooldownAtaque = 38;
       
       p1.vx = p2.tipo === 'mago' || p2.tipo === 'cazador' ? -6 : -12;
       intensidadTemblor = p2.tipo === 'guerrero' || p2.tipo === 'clerigo' ? 6 : 3;
       spawnearParticulas(p1.x + 22, p1.y + 22, p2.colorTematico);
-
-      if (resultado.textoEspecial) {
-        console.log(`[COMBATE] ${p2.nombre}: ${resultado.textoEspecial} (${resultado.dano} DMG)`);
-      }
     }
 
     p1.vida = Math.max(0, p1.vida);
