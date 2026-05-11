@@ -103,7 +103,7 @@ const jugadorSchema = new mongoose.Schema({
 const Jugador = mongoose.model('Jugador', jugadorSchema);
 
 // ==========================================
-// ⚔️ CONTROL DE LA COLA Y COMBATES
+// ⚔️ CONTROL DE LAS COLAS Y ESTADOS
 // ==========================================
 interface JugadorPelea {
   twitchId: string;
@@ -116,6 +116,11 @@ let colaEspera: JugadorPelea[] = [];
 let peleaEnCurso = false;
 let luchadorActual1: JugadorPelea | null = null;
 let luchadorActual2: JugadorPelea | null = null;
+
+let dungeonEnCurso = false;
+let dungeonFaseReclutamiento = false;
+let grupoDungeon: JugadorPelea[] = [];
+let timerReclutamiento: NodeJS.Timeout | null = null;
 
 // ==========================================
 // 🔌 CONEXIÓN CONFIGURABLE A TWITCH
@@ -158,15 +163,81 @@ twitchClient.on('message', async (channel, tags, message, self) => {
   
   if (!twitchId || !username) return;
 
+  // 🟢 COMANDOS ACTUALIZADOS: Incluyen toda la info de Dungeons de forma integrada
   if (msg === '!comandos' || msg === '!ayuda' || msg === '!arena') {
     enviarMensajeChat(
       channel, 
-      `🎮 [ARENA COMMANDS] ⚔️ !luchar [clase] (Clases: guerrero, ninja, mago, clerigo, cazador) | 👤 !stats | 🔄 !clase [rol] | 🏆 !ranking`
+      `🎮 [ARENA] ⚔️ !luchar [clase] (guerrero, ninja, mago, clerigo, cazador) | 👤 !stats | 🔄 !clase [rol] | 🏆 !ranking || 🐲 [DUNGEON] 🏰 !dungeon (Abre Raid) | 🚪 !entrar (Únete al grupo de asalto)`
     );
     return;
   }
 
+  // COMANDO: !DUNGEON (Inicia reclutamiento prioritario)
+  if (msg === '!dungeon') {
+    if (dungeonEnCurso || dungeonFaseReclutamiento || peleaEnCurso) {
+      enviarMensajeChat(channel, `@${username}, la arena se encuentra ocupada con otra actividad. Espera un momento.`);
+      return;
+    }
+
+    dungeonFaseReclutamiento = true;
+    grupoDungeon = [];
+    enviarMensajeChat(channel, `🏰 ¡INCURSIÓN DE MAZMORRA INICIADA! 🐲 Se buscan 4 héroes valientes. Escribe !entrar para unirte al grupo. ¡Quedan 60 segundos express!`);
+    
+    io.emit('dungeon_reclutamiento_abierto', { tiempo: 60 });
+
+    timerReclutamiento = setTimeout(() => {
+      iniciarBatallaDungeon();
+    }, 60000);
+    return;
+  }
+
+  // COMANDO: !ENTRAR (Unirse al asalto cooperativo)
+  if (msg === '!entrar') {
+    if (!dungeonFaseReclutamiento) {
+      enviarMensajeChat(channel, `@${username}, no hay ninguna expedición reclutando en este momento. Escribe !dungeon para abrir una.`);
+      return;
+    }
+    if (grupoDungeon.some(h => h.twitchId === twitchId)) {
+      enviarMensajeChat(channel, `@${username}, ya estás dentro del grupo de asalto.`);
+      return;
+    }
+    if (grupoDungeon.length >= 4) {
+      enviarMensajeChat(channel, `@${username}, el equipo de incursión ya está lleno (4/4). ¡Toca esperar a la siguiente!`);
+      return;
+    }
+
+    let perfil = await Jugador.findOne({ twitchId });
+    if (!perfil) {
+      perfil = new Jugador({ twitchId, username, claseActual: 'guerrero' });
+      await perfil.save();
+    }
+
+    const claseActual = perfil.claseActual;
+    const nivelActual = (perfil as any)[claseActual].nivel;
+
+    grupoDungeon.push({
+      twitchId,
+      nombre: username,
+      clase: claseActual,
+      nivel: nivelActual
+    });
+
+    enviarMensajeChat(channel, `🚪 @${username} [${claseActual.toUpperCase()} Nv.${nivelActual}] se unió al equipo de asalto! (${grupoDungeon.length}/4)`);
+    io.emit('dungeon_actualizar_grupo', grupoDungeon.map(h => ({ nombre: h.nombre, clase: h.clase, nivel: h.nivel })));
+
+    if (grupoDungeon.length === 4) {
+      if (timerReclutamiento) clearTimeout(timerReclutamiento);
+      iniciarBatallaDungeon();
+    }
+    return;
+  }
+
+  // COMANDO: !LUCHAR (Guardado en cola secundaria con prioridad para Dungeons)
   if (msg.startsWith('!luchar')) {
+    if (dungeonFaseReclutamiento || dungeonEnCurso) {
+      enviarMensajeChat(channel, `⏳ @${username}, la arena está ocupada por una mazmorra. Te guardo en lista de espera, pero los héroes tienen prioridad.`);
+    }
+
     if (colaEspera.some(j => j.twitchId === twitchId)) {
       enviarMensajeChat(channel, `@${username}, ya estás en la cola de espera de la arena.`);
       return;
@@ -205,18 +276,20 @@ twitchClient.on('message', async (channel, tags, message, self) => {
 
     enviarMensajeChat(channel, `⚔️ @${username} [${claseActual.toUpperCase()} Nv.${nivelActual}] listo en la cola! (Total: ${colaEspera.length})`);
     io.emit('actualizar_cola', colaEspera.map(j => `${j.nombre}(Nv.${j.nivel})`));
-    chequearSiguientePelea();
+    
+    if (!dungeonFaseReclutamiento && !dungeonEnCurso) {
+      chequearSiguientePelea();
+    }
   }
 
+  // COMANDO: !STATS
   else if (msg === '!stats' || msg === '!perfil') {
     try {
       const perfil = await Jugador.findOne({ twitchId });
-      
       if (!perfil) {
         enviarMensajeChat(channel, `👋 @${username}, aún no has luchado en la arena. ¡Escribe !luchar para registrarte gratis!`);
         return;
       }
-
       const clase = perfil.claseActual;
       const claseData = (perfil as any)[clase];
       const xpSiguienteNivel = claseData.nivel * 100;
@@ -230,6 +303,7 @@ twitchClient.on('message', async (channel, tags, message, self) => {
     }
   }
 
+  // COMANDO: !CLASE
   else if (msg.startsWith('!clase') || msg.startsWith('!rol')) {
     const partes = msg.split(' ');
     const claseElegida = partes[1];
@@ -242,18 +316,12 @@ twitchClient.on('message', async (channel, tags, message, self) => {
 
     try {
       let perfil = await Jugador.findOne({ twitchId });
-      
       if (!perfil) {
-        perfil = new Jugador({
-          twitchId,
-          username,
-          claseActual: claseElegida
-        });
-        await perfil.save();
+        perfil = new Jugador({ twitchId, username, claseActual: claseElegida });
       } else {
         perfil.claseActual = claseElegida;
-        await perfil.save();
       }
+      await perfil.save();
 
       const nivelClase = (perfil as any)[claseElegida].nivel;
       enviarMensajeChat(channel, `✨ @${username}, ahora eres un [${claseElegida.toUpperCase()}] de Nivel ${nivelClase}.`);
@@ -264,16 +332,15 @@ twitchClient.on('message', async (channel, tags, message, self) => {
         colaEspera[indexEnCola].nivel = nivelClase;
         io.emit('actualizar_cola', colaEspera.map(j => `${j.nombre}(Nv.${j.nivel})`));
       }
-
     } catch (error) {
       console.error('Error al cambiar clase:', error);
     }
   }
 
+  // COMANDO: !RANKING
   else if (msg === '!ranking' || msg === '!top') {
     try {
       const jugadores = await Jugador.find();
-      
       const ranking = jugadores.map(j => {
         const victoriasTotales = (j.guerrero?.victorias || 0) + 
                                  (j.ninja?.victorias || 0) + 
@@ -299,8 +366,31 @@ twitchClient.on('message', async (channel, tags, message, self) => {
   }
 });
 
+function iniciarBatallaDungeon() {
+  dungeonFaseReclutamiento = false;
+
+  if (grupoDungeon.length < 2) {
+    enviarMensajeChat(TWITCH_CHANNEL, `❌ La incursión se ha cancelado por falta de héroes (Mínimo 2 requeridos). Volviendo a duelos 1v1.`);
+    dungeonEnCurso = false;
+    chequearSiguientePelea();
+    return;
+  }
+
+  dungeonEnCurso = true;
+
+  const sumaNiveles = grupoDungeon.reduce((acc, h) => acc + h.nivel, 0);
+  const nivelMedio = sumaNiveles / grupoDungeon.length;
+
+  enviarMensajeChat(TWITCH_CHANNEL, `🐉 ¡GRUPO CONFIRMADO! ${grupoDungeon.length} héroes entran en las Mazmorras del Caos... ¡Fase 1: Los Esbirros! ⚔️`);
+  
+  io.emit('dungeon_iniciar', {
+    jugadores: grupoDungeon,
+    nivelMedio: nivelMedio
+  });
+}
+
 function chequearSiguientePelea() {
-  if (peleaEnCurso || colaEspera.length < 2) return;
+  if (peleaEnCurso || dungeonEnCurso || dungeonFaseReclutamiento || colaEspera.length < 2) return;
 
   peleaEnCurso = true;
   luchadorActual1 = colaEspera.shift() || null;
@@ -323,12 +413,62 @@ function chequearSiguientePelea() {
   });
 }
 
-// Conexiones WebSockets
+// ==========================================
+// 🔌 MANEJADOR SOCKETS IO DISPATCHER
+// ==========================================
 io.on('connection', (socket) => {
   console.log('Frontend conectado.');
   socket.emit('actualizar_cola', colaEspera.map(j => `${j.nombre}(Nv.${j.nivel})`));
 
-  // Procesar final del combate y guardar XP con los nuevos modificadores dinámicos
+  // 🟢 EVENTO ACTUALIZADO A 3 FASES: Procesa el botín express de mazmorras (+25 XP por fase)
+  socket.on('dungeon_terminada', async (datos: { victoria: boolean; fasesSuperadas: number }) => {
+    if (grupoDungeon.length === 0) return;
+
+    // ⚖️ Balanceo Express: 25 XP fijos por cada fase superada (Fase 1, 2 o 3). Si limpian la Fase 3, +100 XP Legendarios
+    let xpRecompensa = datos.fasesSuperadas * 25;
+    if (datos.victoria) xpRecompensa += 100;
+
+    try {
+      for (const heroe of grupoDungeon) {
+        const perfil = await Jugador.findOne({ twitchId: heroe.twitchId });
+        if (perfil) {
+          const claseData = (perfil as any)[heroe.clase];
+          claseData.xp += xpRecompensa;
+
+          if (datos.victoria) claseData.victorias += 1;
+
+          // Bucle de subida con desbordamiento controlado (Overflow Fix)
+          let xpNecesaria = claseData.nivel * 100;
+          while (claseData.xp >= xpNecesaria) {
+            claseData.xp -= xpNecesaria;
+            claseData.nivel += 1;
+            enviarMensajeChat(TWITCH_CHANNEL, `🎉 ¡MAZMORRA PURGADA! @${perfil.username} subió a Nivel ${claseData.nivel} como [${heroe.clase.toUpperCase()}]! 👑`);
+            xpNecesaria = claseData.nivel * 100;
+          }
+          await perfil.save();
+        }
+      }
+
+      if (datos.victoria) {
+        enviarMensajeChat(TWITCH_CHANNEL, `🏆 ¡MAZMORRA COMPLETADA! El grupo purgó las 3 fases y derrotó al Boss Supremo. ¡Recompensa total de +${xpRecompensa} XP! 👑`);
+      } else {
+        enviarMensajeChat(TWITCH_CHANNEL, `💀 INCURSIÓN FALLIDA... El grupo cayó en la Fase ${datos.fasesSuperadas + 1}. Consuelo de +${xpRecompensa} XP asignado.`);
+      }
+
+    } catch (err) {
+      console.error('Error al procesar botín de mazmorras:', err);
+    }
+
+    io.emit('dungeon_limpiar_interfaz');
+    grupoDungeon = [];
+    dungeonEnCurso = false;
+
+    setTimeout(() => {
+      chequearSiguientePelea();
+    }, 5000);
+  });
+
+  // Procesar final del combate 1v1 y guardar XP
   socket.on('pelea_terminada', async (datos: { ganador: string }) => {
     if (!luchadorActual1 || !luchadorActual2) return;
 
@@ -345,7 +485,6 @@ io.on('connection', (socket) => {
     const nivelPerdedor = esP1Ganador ? luchadorActual2.nivel : luchadorActual1.nivel;
 
     try {
-      // 1. 👑 GANADOR: +50 XP base, pero si abusa de un nivel bajo, restamos -5 XP por nivel extra
       const perfilGanador = await Jugador.findOne({ twitchId: idGanador });
       if (perfilGanador) {
         const claseData = (perfilGanador as any)[claseGanador];
@@ -357,7 +496,6 @@ io.on('connection', (socket) => {
         if (nivelGanador > nivelPerdedor) {
           const diferencia = nivelGanador - nivelPerdedor;
           const penalizacion = diferencia * 5;
-          // Aplicamos el recorte pero asegurando un suelo mínimo de 15 XP fijos
           xpGanadaGanador = Math.max(15, 50 - penalizacion);
           if (penalizacion > 0) {
             mensajeGanador = ` (Recortado -${penalizacion} XP por vencer a un nivel inferior)`;
@@ -367,16 +505,16 @@ io.on('connection', (socket) => {
         claseData.xp += xpGanadaGanador;
         console.log(`👑 @${perfilGanador.username} sumó +${xpGanadaGanador} XP${mensajeGanador}`);
 
-        const xpNecesaria = claseData.nivel * 100;
-        if (claseData.xp >= xpNecesaria) {
+        let xpNecesaria = claseData.nivel * 100;
+        while (claseData.xp >= xpNecesaria) {
+          claseData.xp -= xpNecesaria;
           claseData.nivel += 1;
-          claseData.xp = 0;
           enviarMensajeChat(TWITCH_CHANNEL, `🎉 ¡LEVEL UP! @${perfilGanador.username} ha alcanzado el Nivel ${claseData.nivel} como [${claseGanador.toUpperCase()}]! ⚔️`);
+          xpNecesaria = claseData.nivel * 100;
         }
         await perfilGanador.save();
       }
 
-      // 2. 💀 PERDEDOR: +15 XP base + bono catch-up (+10 XP por nivel de diferencia si el rival era superior)
       const perfilPerdedor = await Jugador.findOne({ twitchId: idPerdedor });
       if (perfilPerdedor) {
         const claseData = (perfilPerdedor as any)[clasePerdedor];
@@ -395,11 +533,12 @@ io.on('connection', (socket) => {
         claseData.xp += xpGanadaPerdedor;
         console.log(`💀 @${perfilPerdedor.username} sumó +${xpGanadaPerdedor} XP${mensajePerdedor}`);
 
-        const xpNecesaria = claseData.nivel * 100;
-        if (claseData.xp >= xpNecesaria) {
+        let xpNecesaria = claseData.nivel * 100;
+        while (claseData.xp >= xpNecesaria) {
+          claseData.xp -= xpNecesaria;
           claseData.nivel += 1;
-          claseData.xp = 0;
           enviarMensajeChat(TWITCH_CHANNEL, `🎉 ¡LEVEL UP! @${perfilPerdedor.username} ha alcanzado el Nivel ${claseData.nivel} como [${clasePerdedor.toUpperCase()}]! ⚔️`);
+          xpNecesaria = claseData.nivel * 100;
         }
         await perfilPerdedor.save();
       }
