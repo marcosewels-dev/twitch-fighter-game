@@ -46,6 +46,7 @@ class Luchador {
   alto = 45;
   nombre: string;
   tipo: TipoLuchador;
+  nivel: number; 
   
   vidaMax: number;
   vida: number;
@@ -66,26 +67,27 @@ class Luchador {
   direccionMira: 'derecha' | 'izquierda' = 'derecha';
   anguloArma = 0;
 
-  constructor(x: number, y: number, nombre: string, tipo: TipoLuchador) {
+  constructor(x: number, y: number, nombre: string, tipo: TipoLuchador, nivel: number) {
     this.x = x;
     this.y = y;
     this.nombre = nombre;
     this.tipo = tipo;
+    this.nivel = nivel;
 
     if (tipo === 'guerrero') {
       this.emoji = '🛡️';
       this.armaEmoji = '🪓';
       this.colorTematico = '#e74c3c';
       this.vidaMax = 150;      
-      this.velocidad = 2.5;
+      this.velocidad = 2.8;    
       this.rangoAtaque = 70;
-      this.danoMin = 10;       
+      this.danoMin = 12;       
       this.danoMax = 16;
     } else if (tipo === 'ninja') {
       this.emoji = '🥷';
       this.armaEmoji = '🗡️';
       this.colorTematico = '#2ecc71';
-      this.vidaMax = 100;      
+      this.vidaMax = 105;      
       this.velocidad = 5.5;    
       this.rangoAtaque = 55;
       this.danoMin = 8;        
@@ -96,15 +98,15 @@ class Luchador {
       this.colorTematico = '#9b59b6';
       this.vidaMax = 110;      
       this.velocidad = 3.2;
-      this.rangoAtaque = 200;  
+      this.rangoAtaque = 180;  
       this.danoMin = 9;
-      this.danoMax = 22;       
+      this.danoMax = 18;       
     } else if (tipo === 'clerigo') {
       this.emoji = '⛪';
       this.armaEmoji = '🔨';
       this.colorTematico = '#f1c40f';
       this.vidaMax = 140;
-      this.velocidad = 2.1;
+      this.velocidad = 2.3;    
       this.rangoAtaque = 65;
       this.danoMin = 8;
       this.danoMax = 14;
@@ -115,9 +117,15 @@ class Luchador {
       this.vidaMax = 110;
       this.velocidad = 3.8;
       this.rangoAtaque = 210; 
-      this.danoMin = 6;
+      this.danoMin = 8;        
       this.danoMax = 12;
     }
+
+    // Escalado RPG por nivel
+    const nivelesExtra = Math.max(0, this.nivel - 1);
+    this.vidaMax = Math.floor(this.vidaMax * (1 + nivelesExtra * 0.02));
+    this.danoMin = Math.floor(this.danoMin * (1 + nivelesExtra * 0.015));
+    this.danoMax = Math.floor(this.danoMax * (1 + nivelesExtra * 0.015));
 
     this.vida = this.vidaMax;
   }
@@ -152,14 +160,14 @@ class Luchador {
 
     ctx.restore();
 
-    // Nombre con borde para visibilidad en OBS
+    const etiquetaNombre = `${this.nombre} (Nv.${this.nivel})`;
     ctx.fillStyle = '#fff';
     ctx.font = 'bold 13px Arial';
     ctx.textAlign = 'center';
     ctx.strokeStyle = '#000';
     ctx.lineWidth = 3;
-    ctx.strokeText(this.nombre, centroX, this.y - 25);
-    ctx.fillText(this.nombre, centroX, this.y - 25);
+    ctx.strokeText(etiquetaNombre, centroX, this.y - 25);
+    ctx.fillText(etiquetaNombre, centroX, this.y - 25);
 
     // Barra de Vida
     ctx.fillStyle = 'rgba(0,0,0,0.6)';
@@ -212,14 +220,14 @@ let intensidadTemblor = 0;
 let limpiezaTimer: number | null = null;
 
 // --- Recepción de Eventos de Servidor ---
-socket.on('iniciar_pelea', (datos: { p1: string; claseP1: TipoLuchador; p2: string; claseP2: TipoLuchador }) => {
+socket.on('iniciar_pelea', (datos: { p1: string; claseP1: TipoLuchador; nivelP1: number; p2: string; claseP2: TipoLuchador; nivelP2: number }) => {
   if (limpiezaTimer) {
     clearTimeout(limpiezaTimer);
     limpiezaTimer = null;
   }
   
-  p1 = new Luchador(150, 600, datos.p1, datos.claseP1);
-  p2 = new Luchador(1080, 600, datos.p2, datos.claseP2);
+  p1 = new Luchador(150, 600, datos.p1, datos.claseP1, datos.nivelP1);
+  p2 = new Luchador(1080, 600, datos.p2, datos.claseP2, datos.nivelP2);
   peleaActiva = true;
   finDePeleaEnviado = false;
   particulas = [];
@@ -237,6 +245,32 @@ function spawnearParticulas(x: number, y: number, color: string) {
   for (let i = 0; i < 10; i++) {
     particulas.push(new Particula(x, y, color));
   }
+}
+
+// 🟢 FUNCIÓN AUXILIAR PARA CALCULAR EL DAÑO FINAL CONSIDERANDO ESQUIVAS, CRÍTICOS Y BLOQUEOS
+function calcularDanoEfectivo(atacante: Luchador, defensor: Luchador): { dano: number; textoEspecial: string } {
+  // 1. Calcular daño base aleatorio del atacante
+  let danoBase = Math.floor(Math.random() * (atacante.danoMax - atacante.danoMin + 1)) + atacante.danoMin;
+  let textoEspecial = "";
+
+  // Mecánica del Cazador: 20% de probabilidad de asestar un golpe Crítico (x1.5 daño)
+  if (atacante.tipo === 'cazador' && Math.random() < 0.20) {
+    danoBase = Math.floor(danoBase * 1.5);
+    textoEspecial = "🎯 ¡CRÍTICO!";
+  }
+
+  // Mecánica del Ninja: 20% de probabilidad de esquivar por completo el ataque recibido
+  if (defensor.tipo === 'ninja' && Math.random() < 0.20) {
+    return { dano: 0, textoEspecial: "💨 ¡ESQUIVADO!" };
+  }
+
+  // Mecánica del Guerrero: 15% de probabilidad de bloquear reduciendo el daño a la mitad
+  if (defensor.tipo === 'guerrero' && Math.random() < 0.15) {
+    danoBase = Math.floor(danoBase * 0.5);
+    textoEspecial = "🛡️ ¡BLOQUEADO!";
+  }
+
+  return { dano: danoBase, textoEspecial };
 }
 
 // --- Game Loop ---
@@ -274,39 +308,56 @@ function gameLoop() {
     // Ataques de P1
     if (distancia <= p1.rangoAtaque && p1.cooldownAtaque === 0) {
       p1.atacar();
-      const dano = Math.floor(Math.random() * (p1.danoMax - p1.danoMin + 1)) + p1.danoMin;
-      p2.vida -= dano;
+      
+      // 🧮 Calculamos el daño usando el nuevo sistema de pasivas equilibradas
+      const resultado = calcularDanoEfectivo(p1, p2);
+      p2.vida -= resultado.dano;
       
       if (p1.tipo === 'ninja') p1.cooldownAtaque = 12;       
       else if (p1.tipo === 'guerrero') p1.cooldownAtaque = 32; 
       else if (p1.tipo === 'cazador') p1.cooldownAtaque = 20;   
       else if (p1.tipo === 'clerigo') {
-        p1.cooldownAtaque = 38;                                 
-        p1.vida = Math.min(p1.vidaMax, p1.vida + 5);            
+        p1.cooldownAtaque = 38;
+        // Mecánica del Clérigo: Se cura +5, pero si tiene menos del 30% de vida, se cura +10
+        const esCriticoSalud = p1.vida < (p1.vidaMax * 0.3);
+        p1.vida = Math.min(p1.vidaMax, p1.vida + (esCriticoSalud ? 10 : 5));
+        resultado.textoEspecial = esCriticoSalud ? "✨ ¡GRAN REZO!" : "✨ SANACIÓN";
       } else p1.cooldownAtaque = 38;                            
       
       p2.vx = p1.tipo === 'mago' || p1.tipo === 'cazador' ? 6 : 12;
       intensidadTemblor = p1.tipo === 'guerrero' || p1.tipo === 'clerigo' ? 6 : 3;
       spawnearParticulas(p2.x + 22, p2.y + 22, p1.colorTematico);
+
+      // Si hay un evento especial (Crítico, Esquiva, Bloqueo), lo mostramos en consola o lo procesamos
+      if (resultado.textoEspecial) {
+        console.log(`[COMBATE] ${p1.nombre}: ${resultado.textoEspecial} (${resultado.dano} DMG)`);
+      }
     }
 
     // Ataques de P2
     if (distancia <= p2.rangoAtaque && p2.cooldownAtaque === 0) {
       p2.atacar();
-      const dano = Math.floor(Math.random() * (p2.danoMax - p2.danoMin + 1)) + p2.danoMin;
-      p1.vida -= dano;
+      
+      const resultado = calcularDanoEfectivo(p2, p1);
+      p1.vida -= resultado.dano;
       
       if (p2.tipo === 'ninja') p2.cooldownAtaque = 12;
       else if (p2.tipo === 'guerrero') p2.cooldownAtaque = 32;
       else if (p2.tipo === 'cazador') p2.cooldownAtaque = 20;
       else if (p2.tipo === 'clerigo') {
         p2.cooldownAtaque = 38;
-        p2.vida = Math.min(p2.vidaMax, p2.vida + 5);            
+        const esCriticoSalud = p2.vida < (p2.vidaMax * 0.3);
+        p2.vida = Math.min(p2.vidaMax, p2.vida + (esCriticoSalud ? 10 : 5));
+        resultado.textoEspecial = esCriticoSalud ? "✨ ¡GRAN REZO!" : "✨ SANACIÓN";
       } else p2.cooldownAtaque = 38;
       
       p1.vx = p2.tipo === 'mago' || p2.tipo === 'cazador' ? -6 : -12;
       intensidadTemblor = p2.tipo === 'guerrero' || p2.tipo === 'clerigo' ? 6 : 3;
       spawnearParticulas(p1.x + 22, p1.y + 22, p2.colorTematico);
+
+      if (resultado.textoEspecial) {
+        console.log(`[COMBATE] ${p2.nombre}: ${resultado.textoEspecial} (${resultado.dano} DMG)`);
+      }
     }
 
     p1.vida = Math.max(0, p1.vida);
