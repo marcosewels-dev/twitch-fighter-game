@@ -163,7 +163,6 @@ twitchClient.on('message', async (channel, tags, message, self) => {
   
   if (!twitchId || !username) return;
 
-  // 🟢 COMANDOS ACTUALIZADOS: Incluyen toda la info de Dungeons de forma integrada
   if (msg === '!comandos' || msg === '!ayuda' || msg === '!arena') {
     enviarMensajeChat(
       channel, 
@@ -234,10 +233,6 @@ twitchClient.on('message', async (channel, tags, message, self) => {
 
   // COMANDO: !LUCHAR (Guardado en cola secundaria con prioridad para Dungeons)
   if (msg.startsWith('!luchar')) {
-    if (dungeonFaseReclutamiento || dungeonEnCurso) {
-      enviarMensajeChat(channel, `⏳ @${username}, la arena está ocupada por una mazmorra. Te guardo en lista de espera, pero los héroes tienen prioridad.`);
-    }
-
     if (colaEspera.some(j => j.twitchId === twitchId)) {
       enviarMensajeChat(channel, `@${username}, ya estás en la cola de espera de la arena.`);
       return;
@@ -377,6 +372,7 @@ function iniciarBatallaDungeon() {
   }
 
   dungeonEnCurso = true;
+  peleaEnCurso = false; // 🟢 BLINDAJE: Apagamos candado de duelos normales para evitar bloqueos cruzados
 
   const sumaNiveles = grupoDungeon.reduce((acc, h) => acc + h.nivel, 0);
   const nivelMedio = sumaNiveles / grupoDungeon.length;
@@ -420,11 +416,9 @@ io.on('connection', (socket) => {
   console.log('Frontend conectado.');
   socket.emit('actualizar_cola', colaEspera.map(j => `${j.nombre}(Nv.${j.nivel})`));
 
-  // 🟢 EVENTO ACTUALIZADO A 3 FASES: Procesa el botín express de mazmorras (+25 XP por fase)
   socket.on('dungeon_terminada', async (datos: { victoria: boolean; fasesSuperadas: number }) => {
     if (grupoDungeon.length === 0) return;
 
-    // ⚖️ Balanceo Express: 25 XP fijos por cada fase superada (Fase 1, 2 o 3). Si limpian la Fase 3, +100 XP Legendarios
     let xpRecompensa = datos.fasesSuperadas * 25;
     if (datos.victoria) xpRecompensa += 100;
 
@@ -437,7 +431,6 @@ io.on('connection', (socket) => {
 
           if (datos.victoria) claseData.victorias += 1;
 
-          // Bucle de subida con desbordamiento controlado (Overflow Fix)
           let xpNecesaria = claseData.nivel * 100;
           while (claseData.xp >= xpNecesaria) {
             claseData.xp -= xpNecesaria;
@@ -462,6 +455,7 @@ io.on('connection', (socket) => {
     io.emit('dungeon_limpiar_interfaz');
     grupoDungeon = [];
     dungeonEnCurso = false;
+    peleaEnCurso = false; // 🟢 Liberamos la arena para la siguiente actividad
 
     setTimeout(() => {
       chequearSiguientePelea();
@@ -550,9 +544,9 @@ io.on('connection', (socket) => {
 
     luchadorActual1 = null;
     luchadorActual2 = null;
+    peleaEnCurso = false; // 🟢 Liberamos la arena limpiamente
 
     setTimeout(() => {
-      peleaEnCurso = false;
       chequearSiguientePelea();
     }, 5000);
   });
