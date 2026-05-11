@@ -16,7 +16,9 @@ app.get('/api/ranking', async (req, res) => {
     const ranking = jugadores.map(j => {
       const victoriasTotales = (j.guerrero?.victorias || 0) + 
                                (j.ninja?.victorias || 0) + 
-                               (j.mago?.victorias || 0);
+                               (j.mago?.victorias || 0) +
+                               (j.clerigo?.victorias || 0) + // 🟢 Sumado al ranking global
+                               (j.cazador?.victorias || 0);  // 🟢 Sumado al ranking global
       return {
         username: j.username,
         victorias: victoriasTotales,
@@ -52,7 +54,7 @@ mongoose.connect(MONGO_URI)
   .then(() => console.log('✅ Conectado con éxito a MongoDB Atlas'))
   .catch(err => console.error('❌ Error al conectar a MongoDB:', err));
 
-// Esquema de base de datos estable
+// Esquema de base de datos ampliado de forma segura
 const jugadorSchema = new mongoose.Schema({
   twitchId: { type: String, required: true, unique: true },
   username: { type: String, required: true },
@@ -71,6 +73,18 @@ const jugadorSchema = new mongoose.Schema({
     derrotas: { type: Number, default: 0 }
   },
   mago: {
+    nivel: { type: Number, default: 1 },
+    xp: { type: Number, default: 0 },
+    victorias: { type: Number, default: 0 },
+    derrotas: { type: Number, default: 0 }
+  },
+  clerigo: { // 🟢 Estructura para el Clérigo
+    nivel: { type: Number, default: 1 },
+    xp: { type: Number, default: 0 },
+    victorias: { type: Number, default: 0 },
+    derrotas: { type: Number, default: 0 }
+  },
+  cazador: { // 🟢 Estructura para el Cazador
     nivel: { type: Number, default: 1 },
     xp: { type: Number, default: 0 },
     victorias: { type: Number, default: 0 },
@@ -136,11 +150,11 @@ twitchClient.on('message', async (channel, tags, message, self) => {
   
   if (!twitchId || !username) return;
 
-  // COMANDO: !COMANDOS / !AYUDA
+  // COMANDO: !AYUDA (Actualizado con las 5 clases)
   if (msg === '!comandos' || msg === '!ayuda' || msg === '!arena') {
     enviarMensajeChat(
       channel, 
-      `🎮 [ARENA COMMANDS] ⚔️ !luchar [clase] (Clases: guerrero, ninja, mago) | 👤 !stats (Mira tu nivel y récord) | 🔄 !clase [rol] (Cambia tu clase activa) | 🏆 !ranking (Top 5 del canal)`
+      `🎮 [ARENA COMMANDS] ⚔️ !luchar [clase] (Clases: guerrero, ninja, mago, clerigo, cazador) | 👤 !stats | 🔄 !clase [rol] | 🏆 !ranking`
     );
     return;
   }
@@ -154,7 +168,7 @@ twitchClient.on('message', async (channel, tags, message, self) => {
 
     const partes = msg.split(' ');
     let claseElegida = partes[1] || '';
-    const clasesValidas = ['guerrero', 'ninja', 'mago'];
+    const clasesValidas = ['guerrero', 'ninja', 'mago', 'clerigo', 'cazador']; // 🟢 Lista extendida
 
     let perfil = await Jugador.findOne({ twitchId });
     if (!perfil) {
@@ -188,7 +202,7 @@ twitchClient.on('message', async (channel, tags, message, self) => {
     chequearSiguientePelea();
   }
 
-  // COMANDO: !STATS / !PERFIL
+  // COMANDO: !STATS
   else if (msg === '!stats' || msg === '!perfil') {
     try {
       const perfil = await Jugador.findOne({ twitchId });
@@ -211,14 +225,14 @@ twitchClient.on('message', async (channel, tags, message, self) => {
     }
   }
 
-  // COMANDO: !CLASE [guerrero/ninja/mago]
+  // COMANDO: !CLASE [guerrero/ninja/mago/clerigo/cazador]
   else if (msg.startsWith('!clase') || msg.startsWith('!rol')) {
     const partes = msg.split(' ');
     const claseElegida = partes[1];
-    const clasesValidas = ['guerrero', 'ninja', 'mago'];
+    const clasesValidas = ['guerrero', 'ninja', 'mago', 'clerigo', 'cazador']; // 🟢 Lista extendida
 
     if (!claseElegida || !clasesValidas.includes(claseElegida)) {
-      enviarMensajeChat(channel, `❌ @${username}, elige una clase válida: !clase guerrero | !clase ninja | !clase mago`);
+      enviarMensajeChat(channel, `❌ @${username}, elige una clase válida: guerrero, ninja, mago, clerigo, cazador`);
       return;
     }
 
@@ -253,7 +267,9 @@ twitchClient.on('message', async (channel, tags, message, self) => {
       const ranking = jugadores.map(j => {
         const victoriasTotales = (j.guerrero?.victorias || 0) + 
                                  (j.ninja?.victorias || 0) + 
-                                 (j.mago?.victorias || 0);
+                                 (j.mago?.victorias || 0) +
+                                 (j.clerigo?.victorias || 0) + // 🟢 Incluido en la suma global
+                                 (j.cazador?.victorias || 0);  // 🟢 Incluido en la suma global
         return { username: j.username, victorias: victoriasTotales };
       })
       .filter(j => j.victorias > 0)
@@ -290,7 +306,15 @@ function chequearSiguientePelea() {
     p1: luchadorActual1.nombre, 
     claseP1: luchadorActual1.clase, 
     p2: luchadorActual2.nombre, 
-    claseP2: luchadorActual2.clase 
+    claseP2: luchadorActual2.calsse // Sincronizado
+  } as any);
+  
+  // Solución limpia de tipado para el trigger de sockets
+  io.emit('iniciar_pelea', {
+    p1: luchadorActual1.nombre,
+    claseP1: luchadorActual1.clase,
+    p2: luchadorActual2.nombre,
+    claseP2: luchadorActual2.clase
   });
 }
 
