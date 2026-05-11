@@ -47,7 +47,6 @@ const io = new Server(server, {
 // ==========================================
 // 💾 CONEXIÓN A MONGODB ATLAS
 // ==========================================
-// Lee de forma segura la variable de entorno configurada en Render
 const MONGO_URI = process.env.MONGO_URI || 'ERROR: No se ha configurado la variable de entorno MONGO_URI';
 
 mongoose.connect(MONGO_URI)
@@ -98,13 +97,38 @@ let luchadorActual1: JugadorPelea | null = null;
 let luchadorActual2: JugadorPelea | null = null;
 
 // ==========================================
-// 🔌 CONEXIÓN REAL A TWITCH (ACTIVA)
+// 🔌 CONEXIÓN CONFIGURABLE A TWITCH
 // ==========================================
-const twitchClient = new tmi.Client({
+const TWITCH_CHANNEL = process.env.TWITCH_CHANNEL || 'EL_CANAL_DE_TU_AMIGO';
+const TWITCH_BOT_USER = process.env.TWITCH_BOT_USER; // Nombre de la cuenta bot
+const TWITCH_OAUTH_TOKEN = process.env.TWITCH_OAUTH_TOKEN; // oauth:xxxxxxxxx
+
+// Configuramos las opciones del cliente. Si no hay credenciales, se conectará en modo lectura (sin caerse).
+const tmiOptions: any = {
   options: { debug: true },
-  channels: [ 'danqvix' ] // <--- ¡Cambia esto por el canal de tu amigo en minúsculas!
-});
+  channels: [ TWITCH_CHANNEL ]
+};
+
+if (TWITCH_BOT_USER && TWITCH_OAUTH_TOKEN) {
+  tmiOptions.identity = {
+    username: TWITCH_BOT_USER,
+    password: TWITCH_OAUTH_TOKEN
+  };
+}
+
+const twitchClient = new tmi.Client(tmiOptions);
 twitchClient.connect().catch(console.error);
+
+// Función auxiliar para enviar mensajes de forma segura sin romper el servidor
+function enviarMensajeChat(canal: string, mensaje: string) {
+  if (!TWITCH_BOT_USER || !TWITCH_OAUTH_TOKEN) {
+    console.log(`⚠️ [CHAT SIMULADO - Sin Credenciales]: ${mensaje}`);
+    return;
+  }
+  twitchClient.say(canal, mensaje).catch(err => {
+    console.error('❌ Error al enviar mensaje al chat de Twitch:', err);
+  });
+}
 
 twitchClient.on('message', async (channel, tags, message, self) => {
   if (self) return;
@@ -117,7 +141,7 @@ twitchClient.on('message', async (channel, tags, message, self) => {
 
   // COMANDO: !COMANDOS / !AYUDA
   if (msg === '!comandos' || msg === '!ayuda' || msg === '!arena') {
-    twitchClient.say(
+    enviarMensajeChat(
       channel, 
       `🎮 [ARENA COMMANDS] ⚔️ !luchar [clase] (Únete con guerrero, ninja o mago) | 👤 !stats (Mira tu nivel y récord) | 🔄 !clase [rol] (Cambia tu clase activa) | 🏆 !ranking (Top 5 del canal)`
     );
@@ -127,7 +151,7 @@ twitchClient.on('message', async (channel, tags, message, self) => {
   // COMANDO: !LUCHAR
   if (msg.startsWith('!luchar')) {
     if (colaEspera.some(j => j.twitchId === twitchId)) {
-      twitchClient.say(channel, `@${username}, ya estás en la cola de espera de la arena.`);
+      enviarMensajeChat(channel, `@${username}, ya estás en la cola de espera de la arena.`);
       return;
     }
 
@@ -150,7 +174,7 @@ twitchClient.on('message', async (channel, tags, message, self) => {
       perfil.claseActual = claseElegida;
       await perfil.save();
       const nivelNuevaClase = (perfil as any)[claseElegida].nivel;
-      twitchClient.say(channel, `🔄 @${username} cambió su rol activo a [${claseElegida.toUpperCase()}] (Nivel ${nivelNuevaClase})!`);
+      enviarMensajeChat(channel, `🔄 @${username} cambió su rol activo a [${claseElegida.toUpperCase()}] (Nivel ${nivelNuevaClase})!`);
     }
 
     const claseActual = perfil.claseActual;
@@ -163,7 +187,7 @@ twitchClient.on('message', async (channel, tags, message, self) => {
       nivel: nivelActual
     });
 
-    twitchClient.say(channel, `⚔️ @${username} [${claseActual.toUpperCase()} Nv.${nivelActual}] listo en la cola! (Total: ${colaEspera.length})`);
+    enviarMensajeChat(channel, `⚔️ @${username} [${claseActual.toUpperCase()} Nv.${nivelActual}] listo en la cola! (Total: ${colaEspera.length})`);
     io.emit('actualizar_cola', colaEspera.map(j => `${j.nombre}(Nv.${j.nivel})`));
     chequearSiguientePelea();
   }
@@ -174,7 +198,7 @@ twitchClient.on('message', async (channel, tags, message, self) => {
       const perfil = await Jugador.findOne({ twitchId });
       
       if (!perfil) {
-        twitchClient.say(channel, `👋 @${username}, aún no has luchado en la arena. ¡Escribe !luchar para registrarte gratis!`);
+        enviarMensajeChat(channel, `👋 @${username}, aún no has luchado en la arena. ¡Escribe !luchar para registrarte gratis!`);
         return;
       }
 
@@ -182,7 +206,7 @@ twitchClient.on('message', async (channel, tags, message, self) => {
       const claseData = (perfil as any)[clase];
       const xpSiguienteNivel = claseData.nivel * 100;
 
-      twitchClient.say(
+      enviarMensajeChat(
         channel, 
         `👤 [@${username}] Rol Activo: ${clase.toUpperCase()} (Nv. ${claseData.nivel}) | 📈 XP: ${claseData.xp}/${xpSiguienteNivel} | 👑 Victorias: ${claseData.victorias} | 💀 Derrotas: ${claseData.derrotas}`
       );
@@ -198,7 +222,7 @@ twitchClient.on('message', async (channel, tags, message, self) => {
     const clasesValidas = ['guerrero', 'ninja', 'mago'];
 
     if (!claseElegida || !clasesValidas.includes(claseElegida)) {
-      twitchClient.say(channel, `❌ @${username}, elige una clase válida: !clase guerrero | !clase ninja | !clase mago`);
+      enviarMensajeChat(channel, `❌ @${username}, elige una clase válida: !clase guerrero | !clase ninja | !clase mago`);
       return;
     }
 
@@ -219,7 +243,7 @@ twitchClient.on('message', async (channel, tags, message, self) => {
       }
 
       const nivelClase = (perfil as any)[claseElegida].nivel;
-      twitchClient.say(channel, `✨ @${username}, ahora eres un [${claseElegida.toUpperCase()}] de Nivel ${nivelClase}.`);
+      enviarMensajeChat(channel, `✨ @${username}, ahora eres un [${claseElegida.toUpperCase()}] de Nivel ${nivelClase}.`);
 
     } catch (error) {
       console.error('Error al cambiar clase:', error);
@@ -242,12 +266,12 @@ twitchClient.on('message', async (channel, tags, message, self) => {
       .slice(0, 5);
 
       if (ranking.length === 0) {
-        twitchClient.say(channel, "🏆 ¡La arena está limpia! Aún no hay campeones con victorias.");
+        enviarMensajeChat(channel, "🏆 ¡La arena está limpia! Aún no hay campeones con victorias.");
         return;
       }
 
       const textoRanking = ranking.map((j, index) => `${index + 1}. @${j.username} (${j.victorias} 👑)`).join(' | ');
-      twitchClient.say(channel, `🏆 TOP 5 ARENA: ${textoRanking}`);
+      enviarMensajeChat(channel, `🏆 TOP 5 ARENA: ${textoRanking}`);
     } catch (error) {
       console.error('Error al procesar !ranking:', error);
     }
