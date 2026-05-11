@@ -254,6 +254,15 @@ twitchClient.on('message', async (channel, tags, message, self) => {
       const nivelClase = (perfil as any)[claseElegida].nivel;
       enviarMensajeChat(channel, `✨ @${username}, ahora eres un [${claseElegida.toUpperCase()}] de Nivel ${nivelClase}.`);
 
+      // 🛠️ SOLUCIÓN DEL BUG: Si el jugador ya está metido en la cola, actualizamos su ficha en vivo
+      const indexEnCola = colaEspera.findIndex(j => j.twitchId === twitchId);
+      if (indexEnCola !== -1) {
+        colaEspera[indexEnCola].clase = claseElegida;
+        colaEspera[indexEnCola].nivel = nivelClase;
+        // Emitimos al frontend para que los textos e iconos de la lista de espera cambien al instante
+        io.emit('actualizar_cola', colaEspera.map(j => `${j.nombre}(Nv.${j.nivel})`));
+      }
+
     } catch (error) {
       console.error('Error al cambiar clase:', error);
     }
@@ -303,7 +312,6 @@ function chequearSiguientePelea() {
 
   io.emit('actualizar_cola', colaEspera.map(j => `${j.nombre}(Nv.${j.nivel})`));
   
-  // 🛠️ BUG CORREGIDO: Línea duplicada con errata eliminada por completo
   io.emit('iniciar_pelea', {
     p1: luchadorActual1.nombre,
     claseP1: luchadorActual1.clase,
@@ -358,7 +366,7 @@ io.on('connection', (socket) => {
         if (claseData.xp >= xpNecesaria) {
           claseData.nivel += 1;
           claseData.xp = 0;
-          console.log(`🎉 ¡LEVEL UP! @${perfilPerdedor.username} subió a Nivel ${claseData.nivel} (${clasePerdedor})`);
+          console.log(`🎉 ¡LEVEL UP! @${perfilPerdedor.username} subió a Nivel ${claseData.nivel} (${perfilPerdedor})`);
         }
         await perfilPerdedor.save();
       }
