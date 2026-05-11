@@ -10,7 +10,8 @@ const socket = io(BACKEND_URL, {
 const canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
 
-type TipoLuchador = 'guerrero' | 'ninja' | 'mago';
+// 🟢 Añadidas las nuevas clases al tipo global
+type TipoLuchador = 'guerrero' | 'ninja' | 'mago' | 'clerigo' | 'cazador';
 
 // --- Partículas de Impacto ---
 class Particula {
@@ -76,29 +77,49 @@ class Luchador {
       this.emoji = '🛡️';
       this.armaEmoji = '🪓';
       this.colorTematico = '#e74c3c';
-      this.vidaMax = 145;
-      this.velocidad = 2.4;
+      this.vidaMax = 150;      
+      this.velocidad = 2.5;
       this.rangoAtaque = 70;
-      this.danoMin = 7;
-      this.danoMax = 15;
+      this.danoMin = 10;       
+      this.danoMax = 16;
     } else if (tipo === 'ninja') {
       this.emoji = '🥷';
       this.armaEmoji = '🗡️';
       this.colorTematico = '#2ecc71';
-      this.vidaMax = 85;
-      this.velocidad = 5.2;
+      this.vidaMax = 100;      
+      this.velocidad = 5.5;    
       this.rangoAtaque = 55;
-      this.danoMin = 5;
-      this.danoMax = 11;
-    } else { // mago
+      this.danoMin = 8;        
+      this.danoMax = 12;
+    } else if (tipo === 'mago') {
       this.emoji = '🧙';
       this.armaEmoji = '⚡';
       this.colorTematico = '#9b59b6';
-      this.vidaMax = 95;
+      this.vidaMax = 110;      
       this.velocidad = 3.2;
-      this.rangoAtaque = 200;
+      this.rangoAtaque = 200;  
       this.danoMin = 9;
-      this.danoMax = 19;
+      this.danoMax = 22;       
+    } else if (tipo === 'clerigo') {
+      // 🟢 NUEVA CLASE: CLÉRIGO (Tanque/Sustento equilibrado)
+      this.emoji = '⛪';
+      this.armaEmoji = '🔨';
+      this.colorTematico = '#f1c40f';
+      this.vidaMax = 140;
+      this.velocidad = 2.1;
+      this.rangoAtaque = 65;
+      this.danoMin = 8;
+      this.danoMax = 14;
+    } else { 
+      // 🟢 NUEVA CLASE: CAZADOR (Hostigador a distancia equilibrado)
+      this.emoji = '🏹';
+      this.armaEmoji = '🏹';
+      this.colorTematico = '#27ae60';
+      this.vidaMax = 110;
+      this.velocidad = 3.8;
+      this.rangoAtaque = 210; 
+      this.danoMin = 6;
+      this.danoMax = 12;
     }
 
     this.vida = this.vidaMax;
@@ -156,7 +177,7 @@ class Luchador {
     this.vy += this.gravedad;
     this.y += this.vy;
 
-    const sueloY = 600; // Altura optimizada para dejar libre el centro de la pantalla
+    const sueloY = 600; 
     if (this.y >= sueloY) {
       this.y = sueloY;
       this.vy = 0;
@@ -191,11 +212,10 @@ let peleaActiva = false;
 let finDePeleaEnviado = false;
 let particulas: Particula[] = [];
 let intensidadTemblor = 0;
-let limpiezaTimer: number | null = null; // Guardará el temporizador de desaparición
+let limpiezaTimer: number | null = null;
 
 // --- Recepción de Eventos de Servidor ---
 socket.on('iniciar_pelea', (datos: { p1: string; claseP1: TipoLuchador; p2: string; claseP2: TipoLuchador }) => {
-  // Si había un temporizador de limpieza activo de la pelea anterior, lo cancelamos
   if (limpiezaTimer) {
     clearTimeout(limpiezaTimer);
     limpiezaTimer = null;
@@ -208,13 +228,12 @@ socket.on('iniciar_pelea', (datos: { p1: string; claseP1: TipoLuchador; p2: stri
   particulas = [];
 });
 
-// Cuando la pelea termina oficialmente, programamos que todo desaparezca en 5 segundos
 socket.on('pelea_terminada_confirmada', () => {
   limpiezaTimer = setTimeout(() => {
     p1 = null;
     p2 = null;
     limpiezaTimer = null;
-  }, 5000); // 5 segundos de gracia con el ganador en pantalla
+  }, 5000);
 });
 
 function spawnearParticulas(x: number, y: number, color: string) {
@@ -229,8 +248,8 @@ function gameLoop() {
 
   ctx.save();
   if (intensidadTemblor > 0) {
-    const dx = (Math.random() - 0.5) * intensidadTemblor; // Corregido: ¡ya no usa la 'y'!
-    const dy = (Math.random() - 0.5) * intensidadTemblor; // Corregido: ¡ya no usa la 'y'!
+    const dx = (Math.random() - 0.5) * intensidadTemblor;
+    const dy = (Math.random() - 0.5) * intensidadTemblor;
     ctx.translate(dx, dy);
     intensidadTemblor *= 0.85;
     if (intensidadTemblor < 0.5) intensidadTemblor = 0;
@@ -255,26 +274,42 @@ function gameLoop() {
       else p2.x += p2.velocidad;
     }
 
-    // Ataques
+    // Ataques de P1
     if (distancia <= p1.rangoAtaque && p1.cooldownAtaque === 0) {
       p1.atacar();
       const dano = Math.floor(Math.random() * (p1.danoMax - p1.danoMin + 1)) + p1.danoMin;
       p2.vida -= dano;
-      p1.cooldownAtaque = p1.tipo === 'ninja' ? 18 : 35;
       
-      p2.vx = p1.tipo === 'mago' ? 6 : 12;
-      intensidadTemblor = p1.tipo === 'guerrero' ? 6 : 3;
+      // Cooldowns de ataque balanceados
+      if (p1.tipo === 'ninja') p1.cooldownAtaque = 12;       
+      else if (p1.tipo === 'guerrero') p1.cooldownAtaque = 32; 
+      else if (p1.tipo === 'cazador') p1.cooldownAtaque = 20;   // 🏹 Cooldown ligero para arco
+      else if (p1.tipo === 'clerigo') {
+        p1.cooldownAtaque = 38;                                 // ⛪ Cooldown pesado
+        p1.vida = Math.min(p1.vidaMax, p1.vida + 5);            // ✨ Pasiva: Sanación sagrada (+5 PS)
+      } else p1.cooldownAtaque = 38;                            // Mago
+      
+      p2.vx = p1.tipo === 'mago' || p1.tipo === 'cazador' ? 6 : 12;
+      intensidadTemblor = p1.tipo === 'guerrero' || p1.tipo === 'clerigo' ? 6 : 3;
       spawnearParticulas(p2.x + 22, p2.y + 22, p1.colorTematico);
     }
 
+    // Ataques de P2
     if (distancia <= p2.rangoAtaque && p2.cooldownAtaque === 0) {
       p2.atacar();
       const dano = Math.floor(Math.random() * (p2.danoMax - p2.danoMin + 1)) + p2.danoMin;
       p1.vida -= dano;
-      p2.cooldownAtaque = p2.tipo === 'ninja' ? 18 : 35;
       
-      p1.vx = p2.tipo === 'mago' ? -6 : -12;
-      intensidadTemblor = p2.tipo === 'guerrero' ? 6 : 3;
+      if (p2.tipo === 'ninja') p2.cooldownAtaque = 12;
+      else if (p2.tipo === 'guerrero') p2.cooldownAtaque = 32;
+      else if (p2.tipo === 'cazador') p2.cooldownAtaque = 20;
+      else if (p2.tipo === 'clerigo') {
+        p2.cooldownAtaque = 38;
+        p2.vida = Math.min(p2.vidaMax, p2.vida + 5);            // ✨ Pasiva: Sanación sagrada (+5 PS)
+      } else p2.cooldownAtaque = 38;
+      
+      p1.vx = p2.tipo === 'mago' || p2.tipo === 'cazador' ? -6 : -12;
+      intensidadTemblor = p2.tipo === 'guerrero' || p2.tipo === 'clerigo' ? 6 : 3;
       spawnearParticulas(p1.x + 22, p1.y + 22, p2.colorTematico);
     }
 
@@ -312,8 +347,6 @@ function gameLoop() {
     ctx.lineWidth = 5;
     ctx.strokeText(`¡GANADOR: ${ganador}!`, canvas.width / 2, 400);
     ctx.fillText(`¡GANADOR: ${ganador}!`, canvas.width / 2, 400);
-  } else {
-    // Cuando no hay combate, el canvas permanece 100% limpio y transparente para OBS
   }
 
   particulas = particulas.filter(p => p.vida > 0);
