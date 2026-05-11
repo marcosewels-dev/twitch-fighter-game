@@ -254,6 +254,7 @@ twitchClient.on('message', async (channel, tags, message, self) => {
       const nivelClase = (perfil as any)[claseElegida].nivel;
       enviarMensajeChat(channel, `✨ @${username}, ahora eres un [${claseElegida.toUpperCase()}] de Nivel ${nivelClase}.`);
 
+      // 🛠️ BUG CORREGIDO: indexEnCola ahora está bien escrito y sin espacios extra
       const indexEnCola = colaEspera.findIndex(j => j.twitchId === twitchId);
       if (indexEnCola !== -1) {
         colaEspera[indexEnCola].clase = claseElegida;
