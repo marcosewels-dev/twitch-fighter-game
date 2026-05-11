@@ -10,7 +10,6 @@ const socket = io(BACKEND_URL, {
 const canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
 
-// 🟢 Añadidas las nuevas clases al tipo global
 type TipoLuchador = 'guerrero' | 'ninja' | 'mago' | 'clerigo' | 'cazador';
 
 // --- Partículas de Impacto ---
@@ -101,7 +100,6 @@ class Luchador {
       this.danoMin = 9;
       this.danoMax = 22;       
     } else if (tipo === 'clerigo') {
-      // 🟢 NUEVA CLASE: CLÉRIGO (Tanque/Sustento equilibrado)
       this.emoji = '⛪';
       this.armaEmoji = '🔨';
       this.colorTematico = '#f1c40f';
@@ -111,7 +109,6 @@ class Luchador {
       this.danoMin = 8;
       this.danoMax = 14;
     } else { 
-      // 🟢 NUEVA CLASE: CAZADOR (Hostigador a distancia equilibrado)
       this.emoji = '🏹';
       this.armaEmoji = '🏹';
       this.colorTematico = '#27ae60';
@@ -280,14 +277,13 @@ function gameLoop() {
       const dano = Math.floor(Math.random() * (p1.danoMax - p1.danoMin + 1)) + p1.danoMin;
       p2.vida -= dano;
       
-      // Cooldowns de ataque balanceados
       if (p1.tipo === 'ninja') p1.cooldownAtaque = 12;       
       else if (p1.tipo === 'guerrero') p1.cooldownAtaque = 32; 
-      else if (p1.tipo === 'cazador') p1.cooldownAtaque = 20;   // 🏹 Cooldown ligero para arco
+      else if (p1.tipo === 'cazador') p1.cooldownAtaque = 20;   
       else if (p1.tipo === 'clerigo') {
-        p1.cooldownAtaque = 38;                                 // ⛪ Cooldown pesado
-        p1.vida = Math.min(p1.vidaMax, p1.vida + 5);            // ✨ Pasiva: Sanación sagrada (+5 PS)
-      } else p1.cooldownAtaque = 38;                            // Mago
+        p1.cooldownAtaque = 38;                                 
+        p1.vida = Math.min(p1.vidaMax, p1.vida + 5);            
+      } else p1.cooldownAtaque = 38;                            
       
       p2.vx = p1.tipo === 'mago' || p1.tipo === 'cazador' ? 6 : 12;
       intensidadTemblor = p1.tipo === 'guerrero' || p1.tipo === 'clerigo' ? 6 : 3;
@@ -305,7 +301,7 @@ function gameLoop() {
       else if (p2.tipo === 'cazador') p2.cooldownAtaque = 20;
       else if (p2.tipo === 'clerigo') {
         p2.cooldownAtaque = 38;
-        p2.vida = Math.min(p2.vidaMax, p2.vida + 5);            // ✨ Pasiva: Sanación sagrada (+5 PS)
+        p2.vida = Math.min(p2.vidaMax, p2.vida + 5);            
       } else p2.cooldownAtaque = 38;
       
       p1.vx = p2.tipo === 'mago' || p2.tipo === 'cazador' ? -6 : -12;
