@@ -8,6 +8,14 @@ import mongoose from 'mongoose';
 const app = express();
 app.use(cors());
 
+// 🛡️ MIDDLEWARE ANTI-CACHÉ GLOBAL
+app.use((req, res, next) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  next();
+});
+
 // Endpoint público para consultar el Ranking (Top 10 Global)
 app.get('/api/ranking', async (req, res) => {
   try {
@@ -150,7 +158,6 @@ twitchClient.on('message', async (channel, tags, message, self) => {
   
   if (!twitchId || !username) return;
 
-  // COMANDO: !COMANDOS / !AYUDA
   if (msg === '!comandos' || msg === '!ayuda' || msg === '!arena') {
     enviarMensajeChat(
       channel, 
@@ -159,7 +166,6 @@ twitchClient.on('message', async (channel, tags, message, self) => {
     return;
   }
 
-  // COMANDO: !LUCHAR
   if (msg.startsWith('!luchar')) {
     if (colaEspera.some(j => j.twitchId === twitchId)) {
       enviarMensajeChat(channel, `@${username}, ya estás en la cola de espera de la arena.`);
@@ -202,7 +208,6 @@ twitchClient.on('message', async (channel, tags, message, self) => {
     chequearSiguientePelea();
   }
 
-  // COMANDO: !STATS / !PERFIL
   else if (msg === '!stats' || msg === '!perfil') {
     try {
       const perfil = await Jugador.findOne({ twitchId });
@@ -225,7 +230,6 @@ twitchClient.on('message', async (channel, tags, message, self) => {
     }
   }
 
-  // COMANDO: !CLASE [guerrero/ninja/mago/clerigo/cazador]
   else if (msg.startsWith('!clase') || msg.startsWith('!rol')) {
     const partes = msg.split(' ');
     const claseElegida = partes[1];
@@ -254,7 +258,6 @@ twitchClient.on('message', async (channel, tags, message, self) => {
       const nivelClase = (perfil as any)[claseElegida].nivel;
       enviarMensajeChat(channel, `✨ @${username}, ahora eres un [${claseElegida.toUpperCase()}] de Nivel ${nivelClase}.`);
 
-      // 🛠️ BUG CORREGIDO: indexEnCola ahora está bien escrito y sin espacios extra
       const indexEnCola = colaEspera.findIndex(j => j.twitchId === twitchId);
       if (indexEnCola !== -1) {
         colaEspera[indexEnCola].clase = claseElegida;
@@ -267,7 +270,6 @@ twitchClient.on('message', async (channel, tags, message, self) => {
     }
   }
 
-  // COMANDO: !RANKING
   else if (msg === '!ranking' || msg === '!top') {
     try {
       const jugadores = await Jugador.find();
@@ -326,7 +328,7 @@ io.on('connection', (socket) => {
   console.log('Frontend conectado.');
   socket.emit('actualizar_cola', colaEspera.map(j => `${j.nombre}(Nv.${j.nivel})`));
 
-  // Procesar final del combate y guardar XP
+  // Procesar final del combate y guardar XP con los nuevos modificadores dinámicos
   socket.on('pelea_terminada', async (datos: { ganador: string }) => {
     if (!luchadorActual1 || !luchadorActual2) return;
 
@@ -339,13 +341,31 @@ io.on('connection', (socket) => {
     const claseGanador = esP1Ganador ? luchadorActual1.clase : luchadorActual2.clase;
     const clasePerdedor = esP1Ganador ? luchadorActual2.clase : luchadorActual1.clase;
 
+    const nivelGanador = esP1Ganador ? luchadorActual1.nivel : luchadorActual2.nivel;
+    const nivelPerdedor = esP1Ganador ? luchadorActual2.nivel : luchadorActual1.nivel;
+
     try {
-      // 1. Ganador: +50 XP y +1 Victoria
+      // 1. 👑 GANADOR: +50 XP base, pero si abusa de un nivel bajo, restamos -5 XP por nivel extra
       const perfilGanador = await Jugador.findOne({ twitchId: idGanador });
       if (perfilGanador) {
         const claseData = (perfilGanador as any)[claseGanador];
         claseData.victorias += 1;
-        claseData.xp += 50;
+        
+        let xpGanadaGanador = 50;
+        let mensajeGanador = "";
+
+        if (nivelGanador > nivelPerdedor) {
+          const diferencia = nivelGanador - nivelPerdedor;
+          const penalizacion = diferencia * 5;
+          // Aplicamos el recorte pero asegurando un suelo mínimo de 15 XP fijos
+          xpGanadaGanador = Math.max(15, 50 - penalizacion);
+          if (penalizacion > 0) {
+            mensajeGanador = ` (Recortado -${penalizacion} XP por vencer a un nivel inferior)`;
+          }
+        }
+
+        claseData.xp += xpGanadaGanador;
+        console.log(`👑 @${perfilGanador.username} sumó +${xpGanadaGanador} XP${mensajeGanador}`);
 
         const xpNecesaria = claseData.nivel * 100;
         if (claseData.xp >= xpNecesaria) {
@@ -356,12 +376,24 @@ io.on('connection', (socket) => {
         await perfilGanador.save();
       }
 
-      // 2. Perdedor: +15 XP y +1 Derrota
+      // 2. 💀 PERDEDOR: +15 XP base + bono catch-up (+10 XP por nivel de diferencia si el rival era superior)
       const perfilPerdedor = await Jugador.findOne({ twitchId: idPerdedor });
       if (perfilPerdedor) {
         const claseData = (perfilPerdedor as any)[clasePerdedor];
         claseData.derrotas += 1;
-        claseData.xp += 15;
+        
+        let xpGanadaPerdedor = 15;
+        let mensajePerdedor = "";
+
+        if (nivelGanador > nivelPerdedor) {
+          const diferenciaNivel = nivelGanador - nivelPerdedor;
+          const bonoDesafio = diferenciaNivel * 10;
+          xpGanadaPerdedor += bonoDesafio;
+          mensajePerdedor = ` (¡Incluye +${bonoDesafio} XP de Bono por Desafío contra Nv.${nivelGanador}!)`;
+        }
+
+        claseData.xp += xpGanadaPerdedor;
+        console.log(`💀 @${perfilPerdedor.username} sumó +${xpGanadaPerdedor} XP${mensajePerdedor}`);
 
         const xpNecesaria = claseData.nivel * 100;
         if (claseData.xp >= xpNecesaria) {
