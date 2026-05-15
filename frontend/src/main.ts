@@ -206,7 +206,7 @@ socket.on('dungeon_iniciar', (datos: { jugadores: any[]; nivelMedio: number }) =
   faseDungeonActual = 0; 
   nivelMedioDungeon = datos.nivelMedio; 
   grupoDungeonHéroes = datos.jugadores.map((h, i) => new Luchador(80 + i * 60, 600, h.nombre, h.clase, h.nivel, nivelMedioDungeon, true));
-  monstruoActual = new Monstruo(850, 520, 0, nivelMedioDungeon);
+  monstruoActual = new Monstruo(850, 600, 0, nivelMedioDungeon);
 });
 
 socket.on('dungeon_limpiar_interfaz', () => {
@@ -353,7 +353,7 @@ if (apuestasActivasFase) {
       spawnearParticulas(monstruoActual.x + monstruoActual.ancho / 2, monstruoActual.y + monstruoActual.alto / 2, '#fff');
       if (faseDungeonActual < 3) {
         faseDungeonActual++;
-        monstruoActual = new Monstruo(850, 600 - (faseDungeonActual === 3 ? 140 : 100), faseDungeonActual, nivelMedioDungeon);
+        monstruoActual = new Monstruo(850, 600, faseDungeonActual, nivelMedioDungeon);
       } else {
         if (!finDungeonEnviado) {
           finDungeonEnviado = true;
