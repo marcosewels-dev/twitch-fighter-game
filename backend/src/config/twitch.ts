@@ -4,7 +4,7 @@ import { procesarComandoChat } from '../sockets.js';
 
 let twitchClient: tmi.Client | null = null;
 
-export function iniciarBotTwitch(io: Server) {
+export function inicializarTwitch(io: Server) {
     const twitchUser = process.env.TWITCH_USERNAME || process.env.TWITCH_BOT_USER;
     if (!twitchUser || !process.env.TWITCH_OAUTH_TOKEN || !process.env.TWITCH_CHANNEL) {
         console.warn('⚠️ [TWITCH] Credenciales no encontradas en el archivo .env. Ignorando conexión.');
