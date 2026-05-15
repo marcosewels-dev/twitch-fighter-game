@@ -9,6 +9,7 @@ export class Monstruo {
   estadoAnim: 'idle' | 'run' | 'attack' = 'idle';
   frameActual = 0;
   frameTick = 0;
+  direccionMira: 'derecha' | 'izquierda' = 'izquierda'; // Para que mire hacia los héroes
   filasAnimacion = 3;
   columnasAnimacion = 0;
   escalaSprite = 3;
@@ -33,54 +34,54 @@ export class Monstruo {
     const opcionesFase = poolEnemigos[fase] || poolEnemigos[0];
     const tipoElegido = opcionesFase![Math.floor(Math.random() * opcionesFase!.length)]!;
 
-    // 3. Diccionario visual para nombres, emojis y colores temáticos
-    const configVisual: Record<string, { nombre: string, emoji: string, color: string }> = {
-      'lobo': { nombre: '🐺 Lobo Salvaje', emoji: '🐺', color: '#7f8c8d' },
-      'slime': { nombre: '💧 Slime Tóxico', emoji: '💧', color: '#2ecc71' },
-      'orco': { nombre: '👹 Orco Menor', emoji: '👹', color: '#e67e22' },
-      'oso': { nombre: '🐻 Oso Furioso', emoji: '🐻', color: '#8e44ad' },
-      'esqueleto': { nombre: '💀 Esqueleto', emoji: '💀', color: '#bdc3c7' },
-      'orco-elite': { nombre: '👺 Orco de Élite', emoji: '👺', color: '#c0392b' },
-      'esqueleto-arquero': { nombre: '🏹 Esq. Arquero', emoji: '🏹', color: '#95a5a6' },
-      'jinete-orco': { nombre: '🐗 Jinete Orco', emoji: '🐗', color: '#d35400' },
-      'hacha-armadura': { nombre: '🪓 Armadura Maldita', emoji: '🪓', color: '#34495e' }
+    // 3. Diccionario maestro: Nombres, colores y configuración EXACTA del Sprite de cada monstruo
+    // w/h = tamaño del frame | filas/cols = cuadrícula total | row = en qué fila está la animación | f = cuántos frames tiene
+    const configEnemigos: Record<string, any> = {
+      'lobo': { nombre: '🐺 Lobo Salvaje', emoji: '🐺', color: '#7f8c8d', w: 100, h: 100, filas: 8, cols: 10, rowIdle: 0, rowRun: 1, rowAttack: 2, fIdle: 6, fRun: 8, fAttack: 7 },
+      'slime': { nombre: '💧 Slime Tóxico', emoji: '💧', color: '#2ecc71', w: 100, h: 100, filas: 8, cols: 10, rowIdle: 0, rowRun: 1, rowAttack: 2, fIdle: 6, fRun: 8, fAttack: 7 },
+      'orco': { nombre: '👹 Orco Menor', emoji: '👹', color: '#e67e22', w: 100, h: 100, filas: 8, cols: 10, rowIdle: 0, rowRun: 1, rowAttack: 2, fIdle: 6, fRun: 8, fAttack: 7 },
+      'oso': { nombre: '🐻 Oso Furioso', emoji: '🐻', color: '#8e44ad', w: 100, h: 100, filas: 8, cols: 10, rowIdle: 0, rowRun: 1, rowAttack: 2, fIdle: 6, fRun: 8, fAttack: 7 },
+      'esqueleto': { nombre: '💀 Esqueleto', emoji: '💀', color: '#bdc3c7', w: 100, h: 100, filas: 8, cols: 10, rowIdle: 0, rowRun: 1, rowAttack: 2, fIdle: 6, fRun: 8, fAttack: 7 },
+      'orco-elite': { nombre: '👺 Orco de Élite', emoji: '👺', color: '#c0392b', w: 100, h: 100, filas: 8, cols: 10, rowIdle: 0, rowRun: 1, rowAttack: 2, fIdle: 6, fRun: 8, fAttack: 7 },
+      'esqueleto-arquero': { nombre: '🏹 Esq. Arquero', emoji: '🏹', color: '#95a5a6', w: 100, h: 100, filas: 8, cols: 10, rowIdle: 0, rowRun: 1, rowAttack: 2, fIdle: 6, fRun: 8, fAttack: 7 },
+      'jinete-orco': { nombre: '🐗 Jinete Orco', emoji: '🐗', color: '#d35400', w: 100, h: 100, filas: 8, cols: 10, rowIdle: 0, rowRun: 1, rowAttack: 2, fIdle: 6, fRun: 8, fAttack: 7 },
+      'hacha-armadura': { nombre: '🪓 Armadura Maldita', emoji: '🪓', color: '#34495e', w: 100, h: 100, filas: 8, cols: 10, rowIdle: 0, rowRun: 1, rowAttack: 2, fIdle: 6, fRun: 8, fAttack: 7 }
     };
 
-    const conf = configVisual[tipoElegido]!;
+    const conf = configEnemigos[tipoElegido]!;
     this.nombre = conf.nombre;
     this.emoji = conf.emoji;
     this.color = conf.color;
 
-    // 4. Asignamos estadísticas base y tamaño según el Tier
+    // 4. CONFIGURACIÓN DE SPRITES DINÁMICA
+    this.filasAnimacion = conf.filas;
+    this.columnasAnimacion = conf.cols;
+    this.frameWExacto = conf.w;
+    this.frameHExacto = conf.h;
+    this.spritesFila = { idle: conf.rowIdle, run: conf.rowRun, attack: conf.rowAttack };
+    this.framesPorEstado = { idle: conf.fIdle, run: conf.fRun, attack: conf.fAttack };
+
+    // 5. Asignamos estadísticas base y tamaño según el Tier
     if (fase === 0) {
       this.vidaMax = Math.floor(220 * (1 + nivelMedio * 0.05)); this.danoMin = Math.floor(5 * (1 + nivelMedio * 0.05)); this.danoMax = Math.floor(9 * (1 + nivelMedio * 0.05));
       this.escalaSprite = 3.5;
-      // EJEMPLO FUTURO:
-      // this.frameWExacto = 100; this.frameHExacto = 100;
-      // this.filasAnimacion = 8; this.columnasAnimacion = 10;
     } else if (fase === 1) {
       this.vidaMax = Math.floor(340 * (1 + nivelMedio * 0.05)); this.danoMin = Math.floor(7 * (1 + nivelMedio * 0.05)); this.danoMax = Math.floor(12 * (1 + nivelMedio * 0.05));
       this.escalaSprite = 4.5;
-      // this.frameWExacto = 100; this.frameHExacto = 100;
-      // this.filasAnimacion = 8; this.columnasAnimacion = 10;
     } else if (fase === 2) {
       this.ancho = 100; this.alto = 100;
       this.vidaMax = Math.floor(480 * (1 + nivelMedio * 0.06)); this.danoMin = Math.floor(10 * (1 + nivelMedio * 0.06)); this.danoMax = Math.floor(16 * (1 + nivelMedio * 0.06));
       this.escalaSprite = 5.5;
-      // this.frameWExacto = 100; this.frameHExacto = 100;
-      // this.filasAnimacion = 8; this.columnasAnimacion = 10;
     } else {
       this.ancho = 140; this.alto = 140;
       this.vidaMax = Math.floor(850 * (1 + nivelMedio * 0.07)); this.danoMin = Math.floor(15 * (1 + nivelMedio * 0.07)); this.danoMax = Math.floor(26 * (1 + nivelMedio * 0.07));
       this.escalaSprite = 8; // El jefe será enorme
-      // this.frameWExacto = 100; this.frameHExacto = 100;
-      // this.filasAnimacion = 8; this.columnasAnimacion = 10;
     }
     this.vida = this.vidaMax;
 
-    // 5. Intentamos cargar la hoja de sprites según el tipo seleccionado aleatoriamente
+    // 6. Intentamos cargar la hoja de sprites según el tipo seleccionado aleatoriamente
     this.sprite = new Image();
-    this.sprite.src = `/sprites/${tipoElegido}.png`;
+    this.sprite.src = `/sprites/monstruo_${tipoElegido}.png`;
   }
 
   dibujar(ctx: CanvasRenderingContext2D) {
@@ -91,6 +92,7 @@ export class Monstruo {
     const centroY = this.y + this.alto / 2;
     
     ctx.translate(centroX, centroY);
+    if (this.direccionMira === 'izquierda') ctx.scale(-1, 1);
     ctx.shadowBlur = 15; 
     ctx.shadowColor = this.congeladoTimer > 0 ? '#00d2ff' : this.color;
     
