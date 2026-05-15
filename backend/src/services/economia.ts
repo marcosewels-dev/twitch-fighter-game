@@ -1,5 +1,5 @@
 import { Jugador } from '../models/Jugador.js';
-import { enviarMensajeChat } from '../config/twitch.js';
+import { enviarMensajeChat } from '../twitch.js';
 
 interface Apuesta { twitchId: string; username: string; objetivo: string; cantidad: number; }
 
