@@ -55,7 +55,7 @@ const io = new Server(server, {
 // Inicialización asíncrona de la infraestructura
 async function arrancarServidor() {
   await conectarDB();
-  inicializarTwitch();
+  inicializarTwitch(io);
   configurarSockets(io);
 
   const PORT = process.env.PORT || 3000;
