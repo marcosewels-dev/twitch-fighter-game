@@ -1,34 +1,35 @@
 import tmi from 'tmi.js';
+import { Server } from 'socket.io';
+import { procesarComandoChat } from './sockets.js';
 
-const TWITCH_CHANNEL = process.env.TWITCH_CHANNEL || 'EL_CANAL_DE_TU_AMIGO';
-const TWITCH_BOT_USER = process.env.TWITCH_BOT_USER; 
-const TWITCH_OAUTH_TOKEN = process.env.TWITCH_OAUTH_TOKEN; 
+export function iniciarBotTwitch(io: Server) {
+    const twitchUser = process.env.TWITCH_USERNAME || process.env.TWITCH_BOT_USER;
+    if (!twitchUser || !process.env.TWITCH_OAUTH_TOKEN || !process.env.TWITCH_CHANNEL) {
+        console.warn('⚠️ [TWITCH] Credenciales no encontradas en el archivo .env. Ignorando conexión.');
+        return;
+    }
 
-const tmiOptions: any = {
-  options: { debug: true },
-  channels: [ TWITCH_CHANNEL ]
-};
+    const client = new tmi.Client({
+        options: { debug: false },
+        connection: { reconnect: true, secure: true },
+        identity: {
+            username: twitchUser,
+            password: process.env.TWITCH_OAUTH_TOKEN
+        },
+        channels: [process.env.TWITCH_CHANNEL]
+    });
 
-if (TWITCH_BOT_USER && TWITCH_OAUTH_TOKEN) {
-  tmiOptions.identity = {
-    username: TWITCH_BOT_USER,
-    password: TWITCH_OAUTH_TOKEN
-  };
+    client.connect().catch(console.error);
+
+    client.on('connected', (address, port) => {
+        console.log(`✅ [TWITCH] Conectado exitosamente al canal de ${process.env.TWITCH_CHANNEL}`);
+    });
+
+    client.on('message', async (channel, tags, message, self) => {
+        if (self) return; // Evita que el bot se procese a sí mismo
+        const username = tags['display-name'] || tags.username || 'Anonimo';
+        
+        // Pasamos el mensaje al juego (esTest = false)
+        await procesarComandoChat(io, username, message, false);
+    });
 }
-
-export const twitchClient = new tmi.Client(tmiOptions);
-
-export function enviarMensajeChat(mensaje: string): void {
-  if (!TWITCH_BOT_USER || !TWITCH_OAUTH_TOKEN) {
-    console.log(`⚠️ [CHAT SIMULADO]: ${mensaje}`);
-    return;
-  }
-  // Enviar mensaje forzando el canal configurado
-  twitchClient.say(TWITCH_CHANNEL, mensaje).catch(err => {
-    console.error('❌ Error al enviar mensaje al chat de Twitch:', err);
-  });
-}
-
-export const inicializarTwitch = (): void => {
-  twitchClient.connect().catch(console.error);
-};
