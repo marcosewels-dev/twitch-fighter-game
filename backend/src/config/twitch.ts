@@ -1,6 +1,6 @@
 import tmi from 'tmi.js';
 import { Server } from 'socket.io';
-import { procesarComandoChat } from './sockets.js';
+import { procesarComandoChat } from '../sockets.js';
 
 let twitchClient: tmi.Client | null = null;
 
