@@ -124,7 +124,6 @@ let listaAzules: Luchador[] = [];
 let combateGrupalActivo = false;
 let apuestasActivasFase = false;
 let relojContadorPantalla = 0;
-let tipoDePeleaActual: '1v1' | '3v3' = '1v1';
 let particulas: Particula[] = [];
 let intensidadTemblor = 0;
 let limpiezaTimer: number | null = null;
@@ -164,7 +163,6 @@ function transicionarEstado() {
 socket.on('apuestas_abiertas_overlay', (datos: { modo: '1v1' | '3v3', rojos: any[], azules: any[], tiempo: number }) => {
   transicionarEstado();
   apuestasActivasFase = true; 
-  tipoDePeleaActual = datos.modo; 
   relojContadorPantalla = datos.tiempo;
 
   listaRojos = datos.rojos.map((j, i) => {
