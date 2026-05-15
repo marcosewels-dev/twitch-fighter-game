@@ -2,6 +2,8 @@ import tmi from 'tmi.js';
 import { Server } from 'socket.io';
 import { procesarComandoChat } from './sockets.js';
 
+let twitchClient: tmi.Client | null = null;
+
 export function iniciarBotTwitch(io: Server) {
     const twitchUser = process.env.TWITCH_USERNAME || process.env.TWITCH_BOT_USER;
     if (!twitchUser || !process.env.TWITCH_OAUTH_TOKEN || !process.env.TWITCH_CHANNEL) {
@@ -19,6 +21,8 @@ export function iniciarBotTwitch(io: Server) {
         channels: [process.env.TWITCH_CHANNEL]
     });
 
+    twitchClient = client;
+
     client.connect().catch(console.error);
 
     client.on('connected', (address, port) => {
@@ -32,4 +36,10 @@ export function iniciarBotTwitch(io: Server) {
         // Pasamos el mensaje al juego (esTest = false)
         await procesarComandoChat(io, username, message, false);
     });
+}
+
+export function enviarMensajeChat(mensaje: string) {
+    if (twitchClient && process.env.TWITCH_CHANNEL) {
+        twitchClient.say(process.env.TWITCH_CHANNEL, mensaje).catch(console.error);
+    }
 }
