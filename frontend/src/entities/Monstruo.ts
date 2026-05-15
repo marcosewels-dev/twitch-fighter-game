@@ -80,7 +80,7 @@ export class Monstruo {
 
     // 5. Intentamos cargar la hoja de sprites según el tipo seleccionado aleatoriamente
     this.sprite = new Image();
-    this.sprite.src = `/sprites/monstruo_${tipoElegido}.png`;
+    this.sprite.src = `/sprites/${tipoElegido}.png`;
   }
 
   dibujar(ctx: CanvasRenderingContext2D) {
