@@ -3,7 +3,7 @@ import { ArenaService } from './services/arena.js';
 import { DungeonService } from './services/dungeon.js';
 import { EconomiaService } from './services/economia.js';
 
-const VERSION_JUEGO = 1.6;
+const VERSION_JUEGO = 1.7;
 
 // Variables internas compartidas con el controlador de Twitch
 export let listadoApuestas: any[] = [];
@@ -415,17 +415,15 @@ export async function procesarComandoChat(io: Server, username: string, mensaje:
     const comando = partes[0]?.toLowerCase();
 
     if (comando === '!luchar') {
-        const clase = partes[1]?.toLowerCase() || 'guerrero';
         const clasesValidas = ['guerrero', 'ninja', 'mago', 'clerigo', 'cazador'];
+        const claseElegida = partes[1]?.toLowerCase();
+        const claseFinal = clasesValidas.includes(claseElegida!) ? claseElegida! : clasesValidas[Math.floor(Math.random() * clasesValidas.length)]!;
 
-        if (clasesValidas.includes(clase)) {
-            // En Test simulamos diferentes usuarios. En Twitch usamos el real para que un espectador no entre 50 veces.
-            const targetId = esTest ? `test_user_${Math.floor(Math.random() * 1000)}` : usuarioLimpio.toLowerCase();
-            const targetName = esTest ? `${usuarioLimpio}_${Math.floor(Math.random() * 1000)}` : usuarioLimpio;
+        const targetId = esTest ? `test_user_${Math.floor(Math.random() * 1000)}` : usuarioLimpio.toLowerCase();
+        const targetName = esTest ? `${usuarioLimpio}_${Math.floor(Math.random() * 1000)}` : usuarioLimpio;
 
-            ArenaService.agregarACola({ twitchId: targetId, nombre: targetName, clase: clase, nivel: Math.floor(Math.random() * 4) + 1 });
-            evaluarYEjecutarFlujo(io);
-        }
+        ArenaService.agregarACola({ twitchId: targetId, nombre: targetName, clase: claseFinal, nivel: Math.floor(Math.random() * 4) + 1 });
+        evaluarYEjecutarFlujo(io);
     } 
     else if (comando === '!apostar') {
         const bando = partes[1]?.toLowerCase();
@@ -466,7 +464,7 @@ export async function procesarComandoChat(io: Server, username: string, mensaje:
         }
     } 
     else if (comando === '!ayuda' || comando === '!comandos') {
-        const respuestaAyuda = `🤖 [BOT-AYUDA]: Comandos: !luchar [clase], !dungeon, !entrar [clase], !apostar [rojo/azul] [cant]`;
+        const respuestaAyuda = `🤖 COMANDOS: !luchar [clase] (Entrar a Arena) | !apostar [rojo/azul] [oro] (Apuesta a ganador) | !dungeon (Pide Mazmorra) | !entrar [clase] (Únete a Mazmorra) ⚔️ Clases: guerrero, ninja, mago, clerigo, cazador`;
         io.emit('chat_mensaje_bot', { mensaje: respuestaAyuda });
         if (esTest) console.log(`📡 RESPUESTA: ${respuestaAyuda}`);
     }
