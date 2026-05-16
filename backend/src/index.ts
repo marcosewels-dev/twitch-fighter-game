@@ -4,13 +4,18 @@ import http from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import { conectarDB } from './config/db.js';
-import { inicializarTwitch } from './config/twitch.js';
+import { iniciarBotTwitch } from './twitch.js';
 import { configurarSockets } from './sockets.js';
 import { Jugador } from './models/Jugador.js';
 
+// Limpiamos la URL (quitamos la barra '/' final si la tiene por error)
+const frontendUrls = process.env.FRONTEND_URL 
+  ? [process.env.FRONTEND_URL.replace(/\/$/, ""), "http://localhost:5173", "http://127.0.0.1:5173"] 
+  : "*";
+
 const app = express();
 app.use(cors({
-  origin: process.env.FRONTEND_URL ? [process.env.FRONTEND_URL, "http://localhost:5173", "http://127.0.0.1:5173"] : "*"
+  origin: frontendUrls
 }));
 
 // Desactivar caché estricta para asegurar actualizaciones instantáneas del stream
@@ -47,7 +52,7 @@ app.get('/api/ranking', async (req, res) => {
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: { 
-    origin: process.env.FRONTEND_URL ? [process.env.FRONTEND_URL, "http://localhost:5173", "http://127.0.0.1:5173"] : "*", 
+    origin: frontendUrls, 
     methods: ["GET", "POST"] 
   }
 });
@@ -55,8 +60,8 @@ const io = new Server(server, {
 // Inicialización asíncrona de la infraestructura
 async function arrancarServidor() {
   await conectarDB();
-  inicializarTwitch(io);
   configurarSockets(io);
+  iniciarBotTwitch(io); // Inicializamos el bot de Twitch pasándole la instancia de WebSockets
 
   const PORT = process.env.PORT || 3000;
   server.listen(PORT, () => {
@@ -65,32 +70,3 @@ async function arrancarServidor() {
 }
 
 arrancarServidor();
-
-// setTimeout(async () => {
-//   console.log('🧪 [TEST] Iniciando simulación de cola de la arena...');
-  
-//   const { ArenaService } = await import('./services/arena.js');
-//   const { configurarSockets, evaluarYEjecutarFlujo } = await import('./sockets.js');
-
-//   // Creamos un array con 6 héroes ficticios para llenar el Matchmaker
-//   const usuariosFicticios = [
-//     { twitchId: 'test_1', nombre: 'EspectadorGuerrero', clase: 'guerrero', nivel: 3 },
-//     { twitchId: 'test_2', nombre: 'EspectadorNinja', clase: 'ninja', nivel: 5 },
-//     { twitchId: 'test_3', nombre: 'EspectadorMago', clase: 'mago', nivel: 2 },
-//     { twitchId: 'test_4', nombre: 'EspectadorClerigo', clase: 'clerigo', nivel: 4 },
-//     { twitchId: 'test_5', nombre: 'EspectadorCazador', clase: 'cazador', nivel: 1 },
-//     { twitchId: 'test_6', nombre: 'EspectadorNovato', clase: 'guerrero', nivel: 1 },
-//   ];
-
-//   usuariosFicticios.forEach(user => {
-//     const exito = ArenaService.agregarACola(user);
-//     if (exito) console.log(`  🔹 Encolado: ${user.nombre} (Nv.${user.nivel})`);
-//   });
-
-//   console.log(`📊 Total en cola simulada: ${ArenaService.obtenerCola().length} jugadores.`);
-
-//   // Evaluamos si el sistema decide arrancar el nuevo modo 3vs3 al haber 6 personas
-//   console.log('🧪 [TEST] Invocando al selector de flujos del Matchmaker...');
-//   evaluarYEjecutarFlujo(io);
-
-// }, 5000);
