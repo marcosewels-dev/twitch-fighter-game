@@ -171,7 +171,9 @@ socket.on('apuestas_abiertas_overlay', (datos: { modo: '1v1' | '3v3', rojos: any
   });
   listaAzules = datos.azules.map((j, i) => {
     const l = new Luchador(datos.modo === '3v3' ? 950 + i * 55 : 1080, 600, j.nombre, j.clase, j.nivel, 0, false);
-    l.equipo = 'azul'; return l;
+    l.equipo = 'azul'; 
+    l.direccionMira = 'izquierda';
+    return l;
   });
 });
 
