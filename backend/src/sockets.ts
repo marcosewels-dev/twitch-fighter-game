@@ -14,7 +14,7 @@ export let timerApuestasInterval: NodeJS.Timeout | null = null;
 export let timerDungeonInterval: NodeJS.Timeout | null = null;
 export let watchdogArena: NodeJS.Timeout | null = null;
 export let watchdogDungeon: NodeJS.Timeout | null = null;
-export let peticionesDungeonPendientes = 0;
+export let peticionesDungeonPendientes: any[] = [];
 export let peticionesTestDungeonAuto = 0; // Para encolar dungeons masivas de test
 export let ioInstance: Server | null = null;
 
@@ -238,8 +238,13 @@ export function configurarSockets(io: Server) {
 
             // 2️⃣ SIMULAR COMANDO: !dungeon (Abrir reclutamiento)
             else if (comando === '!dungeon') {
-                peticionesDungeonPendientes++;
-                console.log(`⏳ [COLA] Petición de mazmorra recibida. En cola: ${peticionesDungeonPendientes}`);
+                peticionesDungeonPendientes.push({
+                    twitchId: `test_hero_${Math.floor(Math.random() * 1000)}`,
+                    nombre: `${usuarioLimpio}_${Math.floor(Math.random() * 1000)}`,
+                    clase: 'guerrero',
+                    nivel: 5
+                });
+                console.log(`⏳ [COLA] Petición de mazmorra recibida. En cola: ${peticionesDungeonPendientes.length}`);
                 evaluarYEjecutarFlujo(io);
             }
 
@@ -289,14 +294,14 @@ export function configurarSockets(io: Server) {
 // Helper para invocar de forma centralizada al asignador de combates
 export function evaluarYEjecutarFlujo(io: Server) {
     // Si hay una dungeon en cola y la arena está libre, lanzamos la dungeon
-    const totalDungeons = peticionesDungeonPendientes + peticionesTestDungeonAuto;
+    const totalDungeons = peticionesDungeonPendientes.length + peticionesTestDungeonAuto;
     if (totalDungeons > 0 && !DungeonService.dungeonEnCurso && !DungeonService.dungeonFaseReclutamiento && !ArenaService.peleaEnCurso && !apuestasAbiertas) {
         if (peticionesTestDungeonAuto > 0) {
             peticionesTestDungeonAuto--;
             iniciarDungeonReclutamiento(io, true);
         } else {
-            peticionesDungeonPendientes--;
-            iniciarDungeonReclutamiento(io, false);
+            const creador = peticionesDungeonPendientes.shift();
+            iniciarDungeonReclutamiento(io, false, creador);
         }
         return;
     }
@@ -352,11 +357,19 @@ export function registrarApuesta(apuesta: { usuario: string, bando: string, cant
 }
 
 // Función auxiliar para iniciar el reclutamiento de Dungeon
-export function iniciarDungeonReclutamiento(io: Server, esTestAuto: boolean = false) {
+export function iniciarDungeonReclutamiento(io: Server, esTestAuto: boolean = false, creador?: any) {
     DungeonService.resetearDungeon();
     DungeonService.dungeonFaseReclutamiento = true;
 
+    // Añadimos automáticamente al creador si existe
+    if (creador) {
+        DungeonService.agregarHeroe(creador);
+    }
+
     io.emit('dungeon_reclutamiento_abierto', { tiempo: 30 });
+    if (creador) {
+        io.emit('dungeon_actualizar_grupo', DungeonService.grupoDungeon);
+    }
 
     // Si viene del botón de test automático, simulamos que entran 5 personas de golpe
     if (esTestAuto) {
@@ -466,8 +479,32 @@ export async function procesarComandoChat(io: Server, username: string, mensaje:
         }
     }
     else if (comando === '!dungeon') {
-        peticionesDungeonPendientes++;
-        if (esTest) console.log(`⏳ [COLA] Petición de mazmorra en cola.`);
+        const clases = ['guerrero', 'ninja', 'mago', 'clerigo', 'cazador'];
+        const claseElegida = partes[1]?.toLowerCase();
+        let claseFinal = clases.includes(claseElegida!) ? claseElegida! : null;
+
+        const targetId = esTest ? `test_hero_${Math.floor(Math.random() * 1000)}` : usuarioLimpio.toLowerCase();
+        const targetName = esTest ? `${usuarioLimpio}_${Math.floor(Math.random() * 1000)}` : usuarioLimpio;
+        let nivelFinal = Math.floor(Math.random() * 3) + 2;
+
+        if (!esTest) {
+            try {
+                const jugador = await Jugador.findOne({ twitchId: targetId });
+                if (jugador) {
+                    if (!claseFinal && jugador.claseActual) claseFinal = jugador.claseActual;
+                    const statsClase = jugador.get(claseFinal || 'guerrero');
+                    if (statsClase && statsClase.nivel) nivelFinal = statsClase.nivel;
+                }
+            } catch (e) { console.error('Error al leer nivel BD:', e); }
+        }
+
+        if (!claseFinal) claseFinal = clases[Math.floor(Math.random() * clases.length)]!;
+
+        peticionesDungeonPendientes.push({
+            twitchId: targetId, nombre: targetName, clase: claseFinal, nivel: nivelFinal
+        });
+
+        if (esTest) console.log(`⏳ [COLA] Petición de mazmorra en cola. Total: ${peticionesDungeonPendientes.length}`);
         evaluarYEjecutarFlujo(io);
     }
     else if (comando === '!entrar') {
