@@ -32,7 +32,7 @@ export function inicializarTwitch(io: Server) {
     client.on('message', async (channel, tags, message, self) => {
         if (self) return; // Evita que el bot se procese a sí mismo
         const username = tags['display-name'] || tags.username || 'Anonimo';
-        
+        console.log(`💬 [TWITCH CHAT] @${username}: ${message}`);
         // Pasamos el mensaje al juego (esTest = false)
         await procesarComandoChat(io, username, message, false);
     });
