@@ -2,6 +2,8 @@ import { Server, Socket } from 'socket.io';
 import { ArenaService } from './services/arena.js';
 import { DungeonService } from './services/dungeon.js';
 import { EconomiaService } from './services/economia.js';
+import { enviarMensajeChat } from './twitch.js';
+import { Jugador } from './models/Jugador.js';
 
 const VERSION_JUEGO = 1.7;
 
@@ -73,12 +75,18 @@ export function configurarSockets(io: Server) {
             if (totalApostado > 0) {
                 if (totalBandoGanador > 0) {
                     const multiplicador = (totalApostado / totalBandoGanador).toFixed(2);
-                    io.emit('chat_mensaje_bot', { mensaje: `🤖 [BOT] ¡El equipo ${bandoGanador.toUpperCase()} gana! Repartiendo ${totalApostado} 🪙 entre los acertantes (Multiplicador: x${multiplicador}).` });
+                    const msg = `🤖 [BOT] ¡El equipo ${bandoGanador.toUpperCase()} gana! Repartiendo ${totalApostado} 🪙 entre los acertantes (Multiplicador: x${multiplicador}).`;
+                    io.emit('chat_mensaje_bot', { mensaje: msg });
+                    enviarMensajeChat(msg);
                 } else {
-                    io.emit('chat_mensaje_bot', { mensaje: `🤖 [BOT] ¡El equipo ${bandoGanador.toUpperCase()} gana! Nadie apostó por ellos, ¡la casa se embolsa los ${totalApostado} 🪙!` });
+                    const msg = `🤖 [BOT] ¡El equipo ${bandoGanador.toUpperCase()} gana! Nadie apostó por ellos, ¡la casa se embolsa los ${totalApostado} 🪙!`;
+                    io.emit('chat_mensaje_bot', { mensaje: msg });
+                    enviarMensajeChat(msg);
                 }
             } else {
-                 io.emit('chat_mensaje_bot', { mensaje: `🤖 [BOT] Combate terminado sin apuestas. ¡A ver si os animáis en la próxima!` });
+                 const msg = `🤖 [BOT] Combate terminado sin apuestas. ¡A ver si os animáis en la próxima!`;
+                 io.emit('chat_mensaje_bot', { mensaje: msg });
+                 enviarMensajeChat(msg);
             }
 
             try {
@@ -466,6 +474,26 @@ export async function procesarComandoChat(io: Server, username: string, mensaje:
     else if (comando === '!ayuda' || comando === '!comandos') {
         const respuestaAyuda = `🤖 COMANDOS: !luchar [clase] (Entrar a Arena) | !apostar [rojo/azul] [oro] (Apuesta a ganador) | !dungeon (Pide Mazmorra) | !entrar [clase] (Únete a Mazmorra) ⚔️ Clases: guerrero, ninja, mago, clerigo, cazador`;
         io.emit('chat_mensaje_bot', { mensaje: respuestaAyuda });
+        if (!esTest) enviarMensajeChat(respuestaAyuda);
         if (esTest) console.log(`📡 RESPUESTA: ${respuestaAyuda}`);
+    }
+    else if (comando === '!top') {
+        try {
+            const jugadores = await Jugador.find();
+            const ranking = jugadores.map(j => {
+                const victoriasTotales = (j.guerrero?.victorias || 0) + (j.ninja?.victorias || 0) + (j.mago?.victorias || 0) + (j.clerigo?.victorias || 0) + (j.cazador?.victorias || 0); 
+                return { username: j.username, victorias: victoriasTotales };
+            })
+            .filter(j => j.victorias > 0).sort((a, b) => b.victorias - a.victorias).slice(0, 3);
+            
+            const respuestaTop = ranking.length === 0 
+                ? `🏆 Aún no hay nadie en el TOP. ¡Sé el primero en ganar en la arena!`
+                : `🏆 TOP 3 LUCHADORES: ` + ranking.map((j, i) => `${i+1}º ${j.username} (${j.victorias}V)`).join(' | ');
+            
+            io.emit('chat_mensaje_bot', { mensaje: respuestaTop });
+            if (!esTest) enviarMensajeChat(respuestaTop);
+        } catch (error) {
+            console.error('Error al obtener el ranking para Twitch:', error);
+        }
     }
 }
