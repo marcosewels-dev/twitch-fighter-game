@@ -472,7 +472,7 @@ export async function procesarComandoChat(io: Server, username: string, mensaje:
         }
     } 
     else if (comando === '!ayuda' || comando === '!comandos') {
-        const respuestaAyuda = `🤖 COMANDOS: !luchar [clase] (Entrar a Arena) | !apostar [rojo/azul] [oro] (Apuesta a ganador) | !dungeon (Pide Mazmorra) | !entrar [clase] (Únete a Mazmorra) ⚔️ Clases: guerrero, ninja, mago, clerigo, cazador`;
+        const respuestaAyuda = `🤖 COMANDOS: !luchar [clase] (Arena) | !apostar [rojo/azul] [oro] (Apuestas) | !dungeon (Pedir Raid) | !entrar [clase] (Unirse Raid) | !top (Ranking) ⚔️ Clases: guerrero, ninja, mago, clerigo, cazador`;
         io.emit('chat_mensaje_bot', { mensaje: respuestaAyuda });
         if (!esTest) enviarMensajeChat(respuestaAyuda);
         if (esTest) console.log(`📡 RESPUESTA: ${respuestaAyuda}`);
