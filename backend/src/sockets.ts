@@ -425,12 +425,32 @@ export async function procesarComandoChat(io: Server, username: string, mensaje:
     if (comando === '!luchar') {
         const clasesValidas = ['guerrero', 'ninja', 'mago', 'clerigo', 'cazador'];
         const claseElegida = partes[1]?.toLowerCase();
-        const claseFinal = clasesValidas.includes(claseElegida!) ? claseElegida! : clasesValidas[Math.floor(Math.random() * clasesValidas.length)]!;
+        let claseFinal = clasesValidas.includes(claseElegida!) ? claseElegida! : null;
 
         const targetId = esTest ? `test_user_${Math.floor(Math.random() * 1000)}` : usuarioLimpio.toLowerCase();
         const targetName = esTest ? `${usuarioLimpio}_${Math.floor(Math.random() * 1000)}` : usuarioLimpio;
+        let nivelFinal = Math.floor(Math.random() * 4) + 1; // Nivel base
 
-        ArenaService.agregarACola({ twitchId: targetId, nombre: targetName, clase: claseFinal, nivel: Math.floor(Math.random() * 4) + 1 });
+        if (!esTest) {
+            try {
+                const jugador = await Jugador.findOne({ twitchId: targetId });
+                if (jugador) {
+                    if (!claseFinal && jugador.claseActual) {
+                        claseFinal = jugador.claseActual; // Usamos su clase guardada
+                    }
+                    // Cogemos su nivel REAL para esa clase
+                    const statsClase = jugador.get(claseFinal || 'guerrero');
+                    if (statsClase && statsClase.nivel) nivelFinal = statsClase.nivel;
+                }
+            } catch (e) { console.error('Error al leer nivel BD:', e); }
+        }
+
+        // Si es su primera vez y no eligió clase, le damos una aleatoria
+        if (!claseFinal) {
+            claseFinal = clasesValidas[Math.floor(Math.random() * clasesValidas.length)]!;
+        }
+
+        ArenaService.agregarACola({ twitchId: targetId, nombre: targetName, clase: claseFinal, nivel: nivelFinal });
         evaluarYEjecutarFlujo(io);
     } 
     else if (comando === '!apostar') {
@@ -454,12 +474,29 @@ export async function procesarComandoChat(io: Server, username: string, mensaje:
         if (DungeonService.dungeonFaseReclutamiento && DungeonService.grupoDungeon.length < 5) {
             const clases = ['guerrero', 'ninja', 'mago', 'clerigo', 'cazador'];
             const claseElegida = partes[1]?.toLowerCase();
-            const claseFinal = clases.includes(claseElegida!) ? claseElegida! : clases[Math.floor(Math.random() * clases.length)]!;
+            let claseFinal = clases.includes(claseElegida!) ? claseElegida! : null;
 
             const targetId = esTest ? `test_hero_${Math.floor(Math.random() * 1000)}` : usuarioLimpio.toLowerCase();
             const targetName = esTest ? `${usuarioLimpio}_${Math.floor(Math.random() * 1000)}` : usuarioLimpio;
+            let nivelFinal = Math.floor(Math.random() * 3) + 2; // Nivel base
 
-            DungeonService.agregarHeroe({ twitchId: targetId, nombre: targetName, clase: claseFinal, nivel: Math.floor(Math.random() * 3) + 2 });
+            if (!esTest) {
+                try {
+                    const jugador = await Jugador.findOne({ twitchId: targetId });
+                    if (jugador) {
+                        if (!claseFinal && jugador.claseActual) claseFinal = jugador.claseActual;
+                        
+                        const statsClase = jugador.get(claseFinal || 'guerrero');
+                        if (statsClase && statsClase.nivel) nivelFinal = statsClase.nivel;
+                    }
+                } catch (e) { console.error('Error al leer nivel BD:', e); }
+            }
+
+            if (!claseFinal) {
+                claseFinal = clases[Math.floor(Math.random() * clases.length)]!;
+            }
+
+            DungeonService.agregarHeroe({ twitchId: targetId, nombre: targetName, clase: claseFinal, nivel: nivelFinal });
             io.emit('dungeon_actualizar_grupo', DungeonService.grupoDungeon);
 
             if (DungeonService.grupoDungeon.length >= 5) {
@@ -471,8 +508,36 @@ export async function procesarComandoChat(io: Server, username: string, mensaje:
             }
         }
     } 
+    else if (comando === '!clase') {
+        const clasesValidas = ['guerrero', 'ninja', 'mago', 'clerigo', 'cazador'];
+        const nuevaClase = partes[1]?.toLowerCase();
+
+        if (!clasesValidas.includes(nuevaClase!)) {
+            const msg = `❌ @${usuarioLimpio}, clase no válida. Usa: !clase [guerrero/ninja/mago/clerigo/cazador]`;
+            io.emit('chat_mensaje_bot', { mensaje: msg });
+            if (!esTest) enviarMensajeChat(msg);
+            return;
+        }
+
+        try {
+            let jugador = await Jugador.findOne({ twitchId: usuarioLimpio.toLowerCase() });
+            if (!jugador) {
+                jugador = new Jugador({ twitchId: usuarioLimpio.toLowerCase(), username: usuarioLimpio, claseActual: nuevaClase });
+            } else {
+                jugador.claseActual = nuevaClase;
+            }
+            await jugador.save();
+
+            const msg = `✅ @${usuarioLimpio} ha cambiado su clase a ${nuevaClase!.toUpperCase()}. Ahora lucharás con esta clase por defecto.`;
+            io.emit('chat_mensaje_bot', { mensaje: msg });
+            if (!esTest) enviarMensajeChat(msg);
+            if (esTest) console.log(`📡 RESPUESTA: ${msg}`);
+        } catch (error) {
+            console.error('Error al cambiar de clase:', error);
+        }
+    }
     else if (comando === '!ayuda' || comando === '!comandos') {
-        const respuestaAyuda = `🤖 COMANDOS: !luchar [clase] (Arena) | !apostar [rojo/azul] [oro] (Apuestas) | !dungeon (Pedir Raid) | !entrar [clase] (Unirse Raid) | !top (Ranking) ⚔️ Clases: guerrero, ninja, mago, clerigo, cazador`;
+        const respuestaAyuda = `🤖 COMANDOS: !luchar [clase] (Arena) | !apostar [rojo/azul] [oro] (Apuestas) | !dungeon (Raid) | !entrar (Unirse) | !clase [clase] (Cambiar tu clase) | !top ⚔️ Clases: guerrero, ninja, mago, clerigo, cazador`;
         io.emit('chat_mensaje_bot', { mensaje: respuestaAyuda });
         if (!esTest) enviarMensajeChat(respuestaAyuda);
         if (esTest) console.log(`📡 RESPUESTA: ${respuestaAyuda}`);
