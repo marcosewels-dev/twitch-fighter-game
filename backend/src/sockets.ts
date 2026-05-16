@@ -96,6 +96,14 @@ export function configurarSockets(io: Server) {
                     if (contendiente) {
                         const xpBase = EconomiaService.calcularXPGanador1v1(contendiente.nivel, 1, winNombre); // Nivel aproximado para simplificar la fórmula
                         await EconomiaService.procesarSubidaNivel(contendiente.twitchId, xpBase, contendiente.clase, true, 25);
+
+                        const jug = await Jugador.findOne({ twitchId: contendiente.twitchId });
+                        const nivelPost = jug?.get(contendiente.clase)?.nivel || 1;
+                        if (nivelPost > contendiente.nivel) {
+                            const msg = `🎉 ¡@${contendiente.nombre} ha subido al Nivel ${nivelPost} con su ${contendiente.clase.toUpperCase()}! ⚔️`;
+                            io.emit('chat_mensaje_bot', { mensaje: msg });
+                            enviarMensajeChat(msg);
+                        }
                     }
                 }
 
@@ -104,6 +112,14 @@ export function configurarSockets(io: Server) {
                     const contendiente = [...ArenaService.contendientesRojos, ...ArenaService.contendientesAzules].find(c => c.nombre === losNombre);
                     if (contendiente) {
                         await EconomiaService.procesarSubidaNivel(contendiente.twitchId, 15, contendiente.clase, false, 5);
+
+                        const jug = await Jugador.findOne({ twitchId: contendiente.twitchId });
+                        const nivelPost = jug?.get(contendiente.clase)?.nivel || 1;
+                        if (nivelPost > contendiente.nivel) {
+                            const msg = `🎉 ¡@${contendiente.nombre} ha subido al Nivel ${nivelPost} con su ${contendiente.clase.toUpperCase()}! ⚔️`;
+                            io.emit('chat_mensaje_bot', { mensaje: msg });
+                            enviarMensajeChat(msg);
+                        }
                     }
                 }
 
@@ -127,6 +143,12 @@ export function configurarSockets(io: Server) {
             if (watchdogDungeon) clearTimeout(watchdogDungeon); // Cancelamos el perro guardián
             if (DungeonService.grupoDungeon.length === 0) return;
 
+            const msgDungeon = datos.victoria 
+                ? `🤖 [BOT] ¡La Raid ha sido un ÉXITO! Los héroes superaron la mazmorra y regresan con grandes recompensas. 🏆`
+                : `🤖 [BOT] ¡La Raid ha FRACASADO en la fase ${datos.fasesSuperadas + 1}! El grupo ha sido aniquilado por los monstruos... ☠️`;
+            io.emit('chat_mensaje_bot', { mensaje: msgDungeon });
+            enviarMensajeChat(msgDungeon);
+
             let xpRecompensa = datos.fasesSuperadas * 20;
             let oroRecompensa = datos.fasesSuperadas * 15;
 
@@ -143,6 +165,14 @@ export function configurarSockets(io: Server) {
                         xpFinal = Math.floor(xpFinal * 1.25);
                     }
                     await EconomiaService.procesarSubidaNivel(heroe.twitchId, xpFinal, heroe.clase, datos.victoria, oroRecompensa);
+
+                    const jug = await Jugador.findOne({ twitchId: heroe.twitchId });
+                    const nivelPost = jug?.get(heroe.clase)?.nivel || 1;
+                    if (nivelPost > heroe.nivel) {
+                        const msgLvl = `🎉 ¡@${heroe.nombre} ha subido al Nivel ${nivelPost} con su ${heroe.clase.toUpperCase()} tras la mazmorra! 🐉`;
+                        io.emit('chat_mensaje_bot', { mensaje: msgLvl });
+                        enviarMensajeChat(msgLvl);
+                    }
                 }
             } catch (err) {
                 console.error('Error al guardar recompensas de la Dungeon:', err);
@@ -268,7 +298,7 @@ export function configurarSockets(io: Server) {
 
                     // Si ya se ha llenado el grupo de 5, cerramos reclutamiento e iniciamos automáticamente
                     if (DungeonService.grupoDungeon.length >= 5) {
-                        if (timerDungeonInterval) clearTimeout(timerDungeonInterval); // Cancelamos el temporizador de 30s
+                        if (timerDungeonInterval) clearInterval(timerDungeonInterval); // Cancelamos el temporizador de 30s
                         DungeonService.dungeonFaseReclutamiento = false;
                         DungeonService.dungeonEnCurso = true;
                         const nivelMedio = DungeonService.calcularNivelMedio();
@@ -397,23 +427,30 @@ export function iniciarDungeonReclutamiento(io: Server, esTestAuto: boolean = fa
         return;
     }
     
-    if (timerDungeonInterval) clearTimeout(timerDungeonInterval);
-    timerDungeonInterval = setTimeout(() => {
-        if (DungeonService.dungeonFaseReclutamiento) {
-            DungeonService.dungeonFaseReclutamiento = false;
-            if (DungeonService.grupoDungeon.length > 0) {
-                DungeonService.dungeonEnCurso = true;
-                io.emit('dungeon_iniciar', {
-                    jugadores: DungeonService.grupoDungeon,
-                    nivelMedio: DungeonService.calcularNivelMedio()
-                });
-                iniciarWatchdogDungeon(io);
-            } else {
-                io.emit('dungeon_limpiar_interfaz');
-                evaluarYEjecutarFlujo(io); // Evaluar si hay peleas de arena pendientes al cancelar
+    let tiempoRestanteDungeon = 30;
+    if (timerDungeonInterval) clearInterval(timerDungeonInterval);
+    timerDungeonInterval = setInterval(() => {
+        tiempoRestanteDungeon--;
+        io.emit('dungeon_actualizar_timer', { tiempo: tiempoRestanteDungeon });
+
+        if (tiempoRestanteDungeon <= 0) {
+            if (timerDungeonInterval) clearInterval(timerDungeonInterval);
+            if (DungeonService.dungeonFaseReclutamiento) {
+                DungeonService.dungeonFaseReclutamiento = false;
+                if (DungeonService.grupoDungeon.length > 0) {
+                    DungeonService.dungeonEnCurso = true;
+                    io.emit('dungeon_iniciar', {
+                        jugadores: DungeonService.grupoDungeon,
+                        nivelMedio: DungeonService.calcularNivelMedio()
+                    });
+                    iniciarWatchdogDungeon(io);
+                } else {
+                    io.emit('dungeon_limpiar_interfaz');
+                    evaluarYEjecutarFlujo(io); // Evaluar si hay peleas de arena pendientes al cancelar
+                }
             }
         }
-    }, 30000);
+    }, 1000);
 }
 
 // Función auxiliar para el watchdog de la mazmorra
@@ -537,7 +574,7 @@ export async function procesarComandoChat(io: Server, username: string, mensaje:
             io.emit('dungeon_actualizar_grupo', DungeonService.grupoDungeon);
 
             if (DungeonService.grupoDungeon.length >= 5) {
-                if (timerDungeonInterval) clearTimeout(timerDungeonInterval);
+                if (timerDungeonInterval) clearInterval(timerDungeonInterval);
                 DungeonService.dungeonFaseReclutamiento = false;
                 DungeonService.dungeonEnCurso = true;
                 io.emit('dungeon_iniciar', { jugadores: DungeonService.grupoDungeon, nivelMedio: DungeonService.calcularNivelMedio() });
@@ -574,10 +611,38 @@ export async function procesarComandoChat(io: Server, username: string, mensaje:
         }
     }
     else if (comando === '!ayuda' || comando === '!comandos') {
-        const respuestaAyuda = `🤖 COMANDOS: !luchar [clase] (Arena) | !apostar [rojo/azul] [oro] (Apuestas) | !dungeon (Raid) | !entrar (Unirse) | !clase [clase] (Cambiar tu clase) | !top ⚔️ Clases: guerrero, ninja, mago, clerigo, cazador`;
+        const respuestaAyuda = `🤖 COMANDOS: !luchar [clase] (Arena) | !apostar [bando] [oro] | !dungeon | !entrar | !clase [clase] | !stats | !top ⚔️ Clases: guerrero, ninja, mago, clerigo, cazador`;
         io.emit('chat_mensaje_bot', { mensaje: respuestaAyuda });
         if (!esTest) enviarMensajeChat(respuestaAyuda);
         if (esTest) console.log(`📡 RESPUESTA: ${respuestaAyuda}`);
+    }
+    else if (comando === '!stats' || comando === '!oro') {
+        try {
+            const jugador = await Jugador.findOne({ twitchId: usuarioLimpio.toLowerCase() });
+            if (!jugador) {
+                const msg = `❌ @${usuarioLimpio}, aún no tienes estadísticas. ¡Escribe !luchar para empezar tu aventura!`;
+                io.emit('chat_mensaje_bot', { mensaje: msg });
+                if (!esTest) enviarMensajeChat(msg);
+                return;
+            }
+
+            const clasePreferida = jugador.claseActual || 'guerrero';
+            const statsClase = jugador.get(clasePreferida) || { nivel: 1, experiencia: 0, victorias: 0 };
+            const nivelActual = statsClase.nivel || 1;
+            const xpActual = statsClase.experiencia || 0;
+            const victorias = statsClase.victorias || 0;
+            const oro = jugador.oro || 0;
+
+            // Calcular XP restante para el próximo nivel (Fórmula base aproximada: Nivel * 100)
+            const xpNecesaria = nivelActual * 100; 
+            const xpFaltante = Math.max(0, xpNecesaria - xpActual);
+
+            const msg = `📊 @${usuarioLimpio} | ${clasePreferida.toUpperCase()} (Nv.${nivelActual}) | 🪙 Oro: ${oro} | ⚔️ Victorias: ${victorias} | 🌟 Faltan ${xpFaltante} XP para el Nv.${nivelActual + 1}.`;
+            io.emit('chat_mensaje_bot', { mensaje: msg });
+            if (!esTest) enviarMensajeChat(msg);
+        } catch (error) {
+            console.error('Error al obtener stats:', error);
+        }
     }
     else if (comando === '!top') {
         try {
