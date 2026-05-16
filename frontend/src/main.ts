@@ -2,7 +2,7 @@ import { socket } from './services/socket';
 import { Luchador, Particula } from './entities/Luchador';
 import { Monstruo } from './entities/Monstruo';
 
-const VERSION_LOCAL = 1.6; // Control de versiones sincronizado con el backend
+const VERSION_LOCAL = 1.7; // Control de versiones sincronizado con el backend
 
 socket.on('chequear_version', (datos: { version: number }) => {
   if (datos.version !== VERSION_LOCAL) {
