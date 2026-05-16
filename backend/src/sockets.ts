@@ -510,9 +510,9 @@ export async function procesarComandoChat(io: Server, username: string, mensaje:
     } 
     else if (comando === '!clase') {
         const clasesValidas = ['guerrero', 'ninja', 'mago', 'clerigo', 'cazador'];
-        const nuevaClase = partes[1]?.toLowerCase();
+        const nuevaClase = partes[1]?.toLowerCase() || '';
 
-        if (!clasesValidas.includes(nuevaClase!)) {
+        if (!clasesValidas.includes(nuevaClase)) {
             const msg = `❌ @${usuarioLimpio}, clase no válida. Usa: !clase [guerrero/ninja/mago/clerigo/cazador]`;
             io.emit('chat_mensaje_bot', { mensaje: msg });
             if (!esTest) enviarMensajeChat(msg);
