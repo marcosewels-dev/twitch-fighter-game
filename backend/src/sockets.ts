@@ -474,8 +474,8 @@ export async function procesarComandoChat(io: Server, username: string, mensaje:
 
     if (comando === '!luchar') {
         const clasesValidas = ['guerrero', 'ninja', 'mago', 'clerigo', 'cazador'];
-        const claseElegida = partes[1]?.toLowerCase();
-        let claseFinal = clasesValidas.includes(claseElegida!) ? claseElegida! : null;
+        const claseElegida = partes[1]?.toLowerCase() || '';
+        let claseFinal = clasesValidas.includes(claseElegida) ? claseElegida : null;
 
         const targetId = esTest ? `test_user_${Math.floor(Math.random() * 1000)}` : usuarioLimpio.toLowerCase();
         const targetName = esTest ? `${usuarioLimpio}_${Math.floor(Math.random() * 1000)}` : usuarioLimpio;
@@ -517,8 +517,8 @@ export async function procesarComandoChat(io: Server, username: string, mensaje:
     }
     else if (comando === '!dungeon') {
         const clases = ['guerrero', 'ninja', 'mago', 'clerigo', 'cazador'];
-        const claseElegida = partes[1]?.toLowerCase();
-        let claseFinal = clases.includes(claseElegida!) ? claseElegida! : null;
+        const claseElegida = partes[1]?.toLowerCase() || '';
+        let claseFinal = clases.includes(claseElegida) ? claseElegida : null;
 
         const targetId = esTest ? `test_hero_${Math.floor(Math.random() * 1000)}` : usuarioLimpio.toLowerCase();
         const targetName = esTest ? `${usuarioLimpio}_${Math.floor(Math.random() * 1000)}` : usuarioLimpio;
@@ -547,8 +547,8 @@ export async function procesarComandoChat(io: Server, username: string, mensaje:
     else if (comando === '!entrar') {
         if (DungeonService.dungeonFaseReclutamiento && DungeonService.grupoDungeon.length < 5) {
             const clases = ['guerrero', 'ninja', 'mago', 'clerigo', 'cazador'];
-            const claseElegida = partes[1]?.toLowerCase();
-            let claseFinal = clases.includes(claseElegida!) ? claseElegida! : null;
+            const claseElegida = partes[1]?.toLowerCase() || '';
+            let claseFinal = clases.includes(claseElegida) ? claseElegida : null;
 
             const targetId = esTest ? `test_hero_${Math.floor(Math.random() * 1000)}` : usuarioLimpio.toLowerCase();
             const targetName = esTest ? `${usuarioLimpio}_${Math.floor(Math.random() * 1000)}` : usuarioLimpio;
