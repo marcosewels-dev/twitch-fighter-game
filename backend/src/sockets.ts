@@ -501,6 +501,12 @@ export async function procesarComandoChat(io: Server, username: string, mensaje:
         }
 
         ArenaService.agregarACola({ twitchId: targetId, nombre: targetName, clase: claseFinal, nivel: nivelFinal });
+
+        const msg = `⚔️ @${targetName} se ha unido a la cola de la Arena como ${claseFinal.toUpperCase()} (Nv.${nivelFinal}).`;
+        io.emit('chat_mensaje_bot', { mensaje: msg });
+        if (!esTest) enviarMensajeChat(msg);
+        if (esTest) console.log(`📡 RESPUESTA: ${msg}`);
+
         evaluarYEjecutarFlujo(io);
     } 
     else if (comando === '!apostar') {
