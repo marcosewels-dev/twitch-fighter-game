@@ -34,7 +34,7 @@ const jugadorSchema = new Schema<IJugador>({
   claseActual: { type: String, default: 'guerrero' },
   oro: { type: Number, default: 50 },
   tituloEquipado: { type: String, default: '' },
-  titulosDesbloqueados: { type: [String], default: ['Recluta'] },
+  titulosDesbloqueados: { type: [String], default: ['novato'] },
   guerrero: { type: claseSchema, default: () => ({}) },
   ninja: { type: claseSchema, default: () => ({}) },
   mago: { type: claseSchema, default: () => ({}) },

@@ -40,6 +40,7 @@ export let afijoDiario = AFIJOS_POOL[Math.floor(Math.random() * AFIJOS_POOL.leng
 
 // --- SISTEMA DE TÍTULOS DE PRESTIGIO (20 MODIFICADORES) ---
 export const TITULOS_PRESTIGIO = [
+    { id: 'recluta', nombre: 'Recluta', desc: 'Título inicial' },
     { id: 'novato', nombre: 'Novato', desc: 'Juega por primera vez' },
     { id: 'luchador', nombre: 'Luchador', desc: 'Alcanza el Nivel 5' },
     { id: 'gladiador', nombre: 'Gladiador', desc: 'Alcanza el Nivel 10' },
@@ -685,7 +686,8 @@ export async function procesarComandoChat(io: Server, username: string, mensaje:
                 jugador.set('tituloEquipado', tituloId);
                 await jugador.save();
                 const objTit = TITULOS_PRESTIGIO.find(t => t.id === tituloId);
-                const msg = `✅ @${usuarioLimpio} se ha equipado el título de [${objTit?.nombre}]! Lo verás en tu próxima partida.`;
+                const nombreTitulo = objTit ? objTit.nombre : (tituloId.charAt(0).toUpperCase() + tituloId.slice(1));
+                const msg = `✅ @${usuarioLimpio} se ha equipado el título de [${nombreTitulo}]! Lo verás en tu próxima partida.`;
                 io.emit('chat_mensaje_bot', { mensaje: msg });
                 if (!esTest) enviarMensajeChat(msg);
                 if (esTest) console.log(`📡 RESPUESTA: ${msg}`);
