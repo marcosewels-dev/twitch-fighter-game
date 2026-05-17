@@ -632,11 +632,28 @@ export async function procesarComandoChat(io: Server, username: string, mensaje:
         const subCmd = partes[1]?.toLowerCase();
         
         if (subCmd === 'todos' || subCmd === 'lista') {
-            const lista = TITULOS_PRESTIGIO.map(t => `${t.id}(${t.desc})`).join(', ');
-            const msg = `🏆 TÍTULOS: ${lista}. Usa !titulo [id] para equipar.`;
+            const lista = TITULOS_PRESTIGIO.map(t => t.id).join(', ');
+            const msg = `🏆 TÍTULOS: ${lista}. Usa "!titulos info [id]" para ver cómo conseguir uno.`;
             io.emit('chat_mensaje_bot', { mensaje: msg });
-            if (!esTest) enviarMensajeChat(msg.substring(0, 500));
+            if (!esTest) enviarMensajeChat(msg);
             if (esTest) console.log(`📡 RESPUESTA: ${msg}`);
+            return;
+        }
+
+        if (subCmd === 'info') {
+            const tituloId = partes[2]?.toLowerCase();
+            const objTit = TITULOS_PRESTIGIO.find(t => t.id === tituloId);
+            if (objTit) {
+                const msg = `📜 TÍTULO [${objTit.nombre}] (ID: ${objTit.id}): Requisito ➡️ ${objTit.desc}.`;
+                io.emit('chat_mensaje_bot', { mensaje: msg });
+                if (!esTest) enviarMensajeChat(msg);
+                if (esTest) console.log(`📡 RESPUESTA: ${msg}`);
+            } else {
+                const msg = `❌ @${usuarioLimpio}, el título indicado no existe. Ejemplo válido: !titulos info leyenda`;
+                io.emit('chat_mensaje_bot', { mensaje: msg });
+                if (!esTest) enviarMensajeChat(msg);
+                if (esTest) console.log(`📡 RESPUESTA: ${msg}`);
+            }
             return;
         }
 
@@ -681,6 +698,17 @@ export async function procesarComandoChat(io: Server, username: string, mensaje:
                 if (esTest) console.log(`📡 RESPUESTA: ${msg}`);
                 return;
             }
+            
+            if (tituloId === 'quitar' || tituloId === 'ninguno') {
+                jugador.set('tituloEquipado', '');
+                await jugador.save();
+                const msg = `✅ @${usuarioLimpio} se ha quitado el título que llevaba equipado.`;
+                io.emit('chat_mensaje_bot', { mensaje: msg });
+                if (!esTest) enviarMensajeChat(msg);
+                if (esTest) console.log(`📡 RESPUESTA: ${msg}`);
+                return;
+            }
+
             const desbloqueados = obtenerTitulosDesbloqueados(jugador);
             if (desbloqueados.includes(tituloId)) {
                 jugador.set('tituloEquipado', tituloId);
@@ -702,7 +730,7 @@ export async function procesarComandoChat(io: Server, username: string, mensaje:
         }
     }
     else if (comando === '!ayuda' || comando === '!comandos') {
-        const respuestaAyuda = `🤖 COMANDOS: !luchar [clase] | !apostar [bando] [oro] | !dungeon | !entrar | !clase | !stats | !titulos | !afijo | !top ⚔️ Clases: guerrero, ninja, mago, clerigo, cazador`;
+            const respuestaAyuda = `🤖 COMANDOS: !luchar [clase] | !apostar [bando] [oro] | !dungeon | !entrar | !clase | !stats | !titulos [lista/info] | !afijo | !top ⚔️ Clases: guerrero, ninja, mago, clerigo, cazador`;
         io.emit('chat_mensaje_bot', { mensaje: respuestaAyuda });
         if (!esTest) enviarMensajeChat(respuestaAyuda);
         if (esTest) console.log(`📡 RESPUESTA: ${respuestaAyuda}`);
