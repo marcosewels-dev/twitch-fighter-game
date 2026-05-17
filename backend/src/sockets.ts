@@ -62,7 +62,7 @@ export const TITULOS_PRESTIGIO = [
 
 export function obtenerTitulosDesbloqueados(jugador: any): string[] {
     const titulosGuardados = jugador.get('titulosDesbloqueados') || [];
-    const titulos = new Set<string>(['novato', ...titulosGuardados.map((t: string) => t.toLowerCase())]);
+    const titulos = new Set<string>(['recluta', 'novato', ...titulosGuardados.map((t: string) => t.toLowerCase())]);
     const oro = jugador.get('oro') || 0;
     const vicT = (jugador.get('guerrero')?.victorias || 0) + (jugador.get('ninja')?.victorias || 0) + (jugador.get('mago')?.victorias || 0) + (jugador.get('clerigo')?.victorias || 0) + (jugador.get('cazador')?.victorias || 0);
     const nivM = Math.max(jugador.get('guerrero')?.nivel || 1, jugador.get('ninja')?.nivel || 1, jugador.get('mago')?.nivel || 1, jugador.get('clerigo')?.nivel || 1, jugador.get('cazador')?.nivel || 1);
@@ -463,7 +463,10 @@ export async function procesarComandoChat(io: Server, username: string, mensaje:
                 if (statsClase && statsClase.nivel) nivelFinal = statsClase.nivel;
                 
                 const titID = jugador.get('tituloEquipado');
-                if (titID) tituloFinal = TITULOS_PRESTIGIO.find(t => t.id === titID)?.nombre || '';
+                if (titID) {
+                    const tObj = TITULOS_PRESTIGIO.find(t => t.id === titID.toLowerCase());
+                    tituloFinal = tObj ? tObj.nombre : (titID.charAt(0).toUpperCase() + titID.slice(1));
+                }
             } else {
                 // EL JUGADOR NO EXISTE: Lo creamos para que se guarden sus progresos futuros
                 if (!claseFinal) claseFinal = clasesValidas[Math.floor(Math.random() * clasesValidas.length)]!;
@@ -521,7 +524,10 @@ export async function procesarComandoChat(io: Server, username: string, mensaje:
                 const statsClase = jugador.get(claseFinal || 'guerrero');
                 if (statsClase && statsClase.nivel) nivelFinal = statsClase.nivel;
                 const titID = jugador.get('tituloEquipado');
-                if (titID) tituloFinal = TITULOS_PRESTIGIO.find(t => t.id === titID)?.nombre || '';
+                if (titID) {
+                    const tObj = TITULOS_PRESTIGIO.find(t => t.id === titID.toLowerCase());
+                    tituloFinal = tObj ? tObj.nombre : (titID.charAt(0).toUpperCase() + titID.slice(1));
+                }
             } else {
                 // EL JUGADOR NO EXISTE: Lo creamos para guardar stats de la raid
                 if (!claseFinal) claseFinal = clases[Math.floor(Math.random() * clases.length)]!;
@@ -563,7 +569,10 @@ export async function procesarComandoChat(io: Server, username: string, mensaje:
                     const statsClase = jugador.get(claseFinal || 'guerrero');
                     if (statsClase && statsClase.nivel) nivelFinal = statsClase.nivel;
                     const titID = jugador.get('tituloEquipado');
-                    if (titID) tituloFinal = TITULOS_PRESTIGIO.find(t => t.id === titID)?.nombre || '';
+                    if (titID) {
+                        const tObj = TITULOS_PRESTIGIO.find(t => t.id === titID.toLowerCase());
+                        tituloFinal = tObj ? tObj.nombre : (titID.charAt(0).toUpperCase() + titID.slice(1));
+                    }
                 } else {
                     // EL JUGADOR NO EXISTE: Lo creamos en DB
                     if (!claseFinal) claseFinal = clases[Math.floor(Math.random() * clases.length)]!;
@@ -670,7 +679,11 @@ export async function procesarComandoChat(io: Server, username: string, mensaje:
             
             const desbloqueados = obtenerTitulosDesbloqueados(jugador);
             const titID = jugador.get('tituloEquipado');
-            const tituloActualStr = titID ? `(Equipado: ${titID})` : '(Ninguno)';
+            let tituloActualStr = '(Ninguno)';
+            if (titID) {
+                const tObj = TITULOS_PRESTIGIO.find(t => t.id === titID.toLowerCase());
+                tituloActualStr = `(Equipado: ${tObj ? tObj.nombre : titID})`;
+            }
             const msg = `🏅 @${usuarioLimpio}, tienes ${desbloqueados.length} títulos: ${desbloqueados.join(', ')}. ${tituloActualStr}. Usa !titulo [nombre] para equiparte uno o !titulos todos para ver la lista.`;
             io.emit('chat_mensaje_bot', { mensaje: msg });
             if (!esTest) enviarMensajeChat(msg.substring(0, 500));
