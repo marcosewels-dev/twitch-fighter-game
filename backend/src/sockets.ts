@@ -639,9 +639,11 @@ export async function procesarComandoChat(io: Server, username: string, mensaje:
         }
     }
     else if (comando === '!afijo') {
-        const msg = `🔮 MODIFICADOR DE HOY: ${afijoDiario.nombre} - ${afijoDiario.desc}`;
-        io.emit('chat_mensaje_bot', { mensaje: msg });
-        if (!esTest) enviarMensajeChat(msg);
+        if (afijoDiario) {
+            const msg = `🔮 MODIFICADOR DE HOY: ${afijoDiario.nombre} - ${afijoDiario.desc}`;
+            io.emit('chat_mensaje_bot', { mensaje: msg });
+            if (!esTest) enviarMensajeChat(msg);
+        }
     }
     else if (comando === '!ayuda' || comando === '!comandos') {
         const respuestaAyuda = `🤖 COMANDOS: !luchar [clase] | !apostar [bando] [oro] | !dungeon | !entrar | !clase | !stats | !afijo | !top ⚔️ Clases: guerrero, ninja, mago, clerigo, cazador`;
