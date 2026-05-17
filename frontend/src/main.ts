@@ -139,6 +139,11 @@ let nivelMedioDungeon = 1;
 let finDungeonEnviado = false;
 let colaEspera: string[] = [];
 
+// Escuchar el afijo del servidor y guardarlo globalmente
+socket.on('afijo_actualizado', (afijo: any) => {
+  (window as any).afijoDiario = afijo;
+});
+
 // --- FUNCIONES DE LIMPIEZA (MÁQUINA DE ESTADOS) ---
 function transicionarEstado() {
   // 1. Cancelamos cualquier temporizador de limpieza pendiente (evita bugs visuales)
@@ -228,6 +233,15 @@ function gameLoop() {
   if (intensidadTemblor > 0) {
     ctx.translate((Math.random() - 0.5) * intensidadTemblor, (Math.random() - 0.5) * intensidadTemblor);
     intensidadTemblor *= 0.85; if (intensidadTemblor < 0.5) intensidadTemblor = 0;
+  }
+
+  // 🔮 DIBUJAR AFIJO ACTIVO EN LA ESQUINA
+  const af = (window as any).afijoDiario;
+  if (af) {
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 16px Arial'; ctx.textAlign = 'left';
+      ctx.strokeStyle = '#000'; ctx.lineWidth = 3;
+      ctx.strokeText(`🔮 Hoy: ${af.nombre}`, 10, 25);
+      ctx.fillText(`🔮 Hoy: ${af.nombre}`, 10, 25);
   }
 
 if (apuestasActivasFase) {
