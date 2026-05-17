@@ -291,11 +291,14 @@ export function configurarSockets(io: Server) {
     });
 }
 
+export let timerEmparejamientoArena: NodeJS.Timeout | null = null;
+
 // Helper para invocar de forma centralizada al asignador de combates
 export function evaluarYEjecutarFlujo(io: Server) {
-    // Si hay una dungeon en cola y la arena está libre, lanzamos la dungeon
     const totalDungeons = peticionesDungeonPendientes.length + peticionesTestDungeonAuto;
-    if (totalDungeons > 0 && !DungeonService.dungeonEnCurso && !DungeonService.dungeonFaseReclutamiento && !ArenaService.peleaEnCurso && !apuestasAbiertas) {
+    
+    // Si hay una dungeon en cola y la arena está libre, lanzamos la dungeon
+    if (totalDungeons > 0 && !DungeonService.dungeonEnCurso && !DungeonService.dungeonFaseReclutamiento && !ArenaService.peleaEnCurso && !apuestasAbiertas && !timerEmparejamientoArena) {
         if (peticionesTestDungeonAuto > 0) {
             peticionesTestDungeonAuto--;
             iniciarDungeonReclutamiento(io, true);
@@ -306,6 +309,34 @@ export function evaluarYEjecutarFlujo(io: Server) {
         return;
     }
 
+    const cola = ArenaService.obtenerCola();
+
+    // Si ya tenemos 6 luchadores, cancelamos cualquier espera y lanzamos el 3v3 directo
+    if (cola.length >= 6 && !ArenaService.peleaEnCurso && !DungeonService.dungeonEnCurso && !DungeonService.dungeonFaseReclutamiento && !apuestasAbiertas) {
+        if (timerEmparejamientoArena) {
+            clearTimeout(timerEmparejamientoArena);
+            timerEmparejamientoArena = null;
+        }
+        ejecutarCombate(io);
+        return;
+    }
+
+    if (timerEmparejamientoArena) return; // Si ya estamos esperando gente para la arena, no hacer nada
+
+    if (cola.length >= 2 && !ArenaService.peleaEnCurso && !DungeonService.dungeonEnCurso && !DungeonService.dungeonFaseReclutamiento && !apuestasAbiertas) {
+        const msg = `⏳ ¡Combate inminente en 15s! Escribe !luchar para unirte a la cola y forzar un 3vs3 épico.`;
+        io.emit('chat_mensaje_bot', { mensaje: msg });
+        if (!ioInstance) enviarMensajeChat(msg); // Opcional para test
+
+        timerEmparejamientoArena = setTimeout(() => {
+            timerEmparejamientoArena = null;
+            ejecutarCombate(io);
+        }, 15000);
+    }
+}
+
+function ejecutarCombate(io: Server) {
+    const totalDungeons = peticionesDungeonPendientes.length + peticionesTestDungeonAuto;
     const resultado = ArenaService.evaluarSiguienteCombate(io, DungeonService.dungeonEnCurso || totalDungeons > 0, DungeonService.dungeonFaseReclutamiento);
 
     if (resultado.arrancó) {
@@ -341,6 +372,8 @@ export function evaluarYEjecutarFlujo(io: Server) {
                 }, 180000); // 3 minutos
             }
         }, 1000);
+    } else {
+        evaluarYEjecutarFlujo(io);
     }
 }
 
