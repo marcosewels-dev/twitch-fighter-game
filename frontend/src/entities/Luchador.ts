@@ -125,6 +125,22 @@ export class Luchador {
 
     this.vida = this.vidaMax;
 
+    // --- 🔮 APLICAR REGLAS DEL AFIJO DIARIO ---
+    const afijo = (window as any).afijoDiario?.id;
+    if (afijo === 'frenesi') { this.danoMin *= 1.2; this.danoMax *= 1.2; this.vidaMax *= 0.85; }
+    else if (afijo === 'hierro') { this.vidaMax *= 1.2; this.danoMin *= 0.85; this.danoMax *= 0.85; }
+    else if (afijo === 'viento' || afijo === 'fuego') { this.velocidad *= 1.25; }
+    else if (afijo === 'hielo') { this.velocidad *= 0.7; }
+    else if (afijo === 'niebla' && tipo === 'ninja') { this.cooldownAtaque = 15; }
+    else if (afijo === 'arcano' && tipo === 'mago') { this.danoMin *= 1.3; this.danoMax *= 1.3; }
+    else if (afijo === 'fe' && tipo === 'clerigo') { this.vidaMax *= 1.3; }
+    else if (afijo === 'francotirador' && tipo === 'cazador') { this.rangoAtaque += 30; }
+    else if (afijo === 'berserker' && tipo === 'guerrero') { this.danoMin *= 1.2; this.danoMax *= 1.2; }
+    else if (afijo === 'critico') { this.danoMax *= 1.3; }
+    
+    this.vidaMax = Math.floor(this.vidaMax); // Prevenir decimales flotantes
+    this.vida = this.vidaMax;
+
     // Intentamos cargar la hoja de sprites desde la carpeta pública
     this.sprite = new Image();
     this.sprite.src = `/sprites/${tipo}.png`;
