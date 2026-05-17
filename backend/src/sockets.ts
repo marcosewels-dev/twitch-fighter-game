@@ -18,12 +18,34 @@ export let peticionesDungeonPendientes: any[] = [];
 export let peticionesTestDungeonAuto = 0; // Para encolar dungeons masivas de test
 export let ioInstance: Server | null = null;
 
+// --- SISTEMA DE AFIJOS DIARIOS (14 MODIFICADORES) ---
+export const AFIJOS_POOL = [
+    { id: 'soleado', nombre: '🌞 Día Despejado', desc: 'Condiciones normales de combate.' },
+    { id: 'frenesi', nombre: '🩸 Frenesí', desc: '+20% Daño, -15% Vida máxima para todos.' },
+    { id: 'hierro', nombre: '🛡️ Piel de Hierro', desc: '+20% Vida, -15% Daño para todos.' },
+    { id: 'viento', nombre: '🏃 Viento de Cola', desc: 'Todos se mueven un 25% más rápido.' },
+    { id: 'niebla', nombre: '🌫️ Niebla Densa', desc: 'Los Ninjas atacan más rápido.' },
+    { id: 'arcano', nombre: '✨ Sobrecarga Arcana', desc: 'Magos hacen +30% Daño pero atacan más lento.' },
+    { id: 'fe', nombre: '⛪ Fe Inquebrantable', desc: 'Clérigos tienen +30% Vida máxima.' },
+    { id: 'francotirador', nombre: '🏹 Francotirador', desc: 'Cazadores atacan desde más lejos (+30 rango).' },
+    { id: 'berserker', nombre: '🪓 Furia Berserker', desc: 'Guerreros hacen +20% Daño físico.' },
+    { id: 'critico', nombre: '☠️ Toque Mortal', desc: 'Todos tienen su daño máximo potenciado.' },
+    { id: 'vampirismo', nombre: '🧛 Noche de Vampiros', desc: 'Nadie se cura (Próximamente: Robo de vida).' },
+    { id: 'hielo', nombre: '❄️ Suelo Helado', desc: 'Todos se mueven un 30% más lento.' },
+    { id: 'fuego', nombre: '🔥 Ola de Calor', desc: 'El suelo quema, todos caminan más rápido.' },
+    { id: 'oro', nombre: '💰 Fiebre del Oro', desc: 'Día de riquezas. (Multiplicador de apuestas +20%).' }
+];
+// Selecciona un afijo aleatorio al encender el servidor (se puede cambiar por un cronómetro diario luego)
+export let afijoDiario = AFIJOS_POOL[Math.floor(Math.random() * AFIJOS_POOL.length)];
 
 export function configurarSockets(io: Server) {
     ioInstance = io;
     io.on('connection', (socket: Socket) => {
         // Control automático de versiones anti-caché para el OBS
         socket.emit('chequear_version', { version: VERSION_JUEGO });
+
+        // Enviar el modificador de hoy al Frontend para que lo pinte
+        socket.emit('afijo_actualizado', afijoDiario);
 
         // Sincroniza la cola actual al conectar
         const colaFormateada = ArenaService.obtenerCola().map(j => `${j.nombre}(Nv.${j.nivel})`);
@@ -616,8 +638,13 @@ export async function procesarComandoChat(io: Server, username: string, mensaje:
             console.error('Error al cambiar de clase:', error);
         }
     }
+    else if (comando === '!afijo') {
+        const msg = `🔮 MODIFICADOR DE HOY: ${afijoDiario.nombre} - ${afijoDiario.desc}`;
+        io.emit('chat_mensaje_bot', { mensaje: msg });
+        if (!esTest) enviarMensajeChat(msg);
+    }
     else if (comando === '!ayuda' || comando === '!comandos') {
-        const respuestaAyuda = `🤖 COMANDOS: !luchar [clase] (Arena) | !apostar [bando] [oro] | !dungeon | !entrar | !clase [clase] | !stats | !top ⚔️ Clases: guerrero, ninja, mago, clerigo, cazador`;
+        const respuestaAyuda = `🤖 COMANDOS: !luchar [clase] | !apostar [bando] [oro] | !dungeon | !entrar | !clase | !stats | !afijo | !top ⚔️ Clases: guerrero, ninja, mago, clerigo, cazador`;
         io.emit('chat_mensaje_bot', { mensaje: respuestaAyuda });
         if (!esTest) enviarMensajeChat(respuestaAyuda);
         if (esTest) console.log(`📡 RESPUESTA: ${respuestaAyuda}`);
