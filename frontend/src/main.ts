@@ -171,11 +171,11 @@ socket.on('apuestas_abiertas_overlay', (datos: { modo: '1v1' | '3v3', rojos: any
   relojContadorPantalla = datos.tiempo;
 
   listaRojos = datos.rojos.map((j, i) => {
-    const l = new Luchador(datos.modo === '3v3' ? 100 + i * 55 : 150, 600, j.nombre, j.clase, j.nivel, 0, false);
+    const l = new Luchador(datos.modo === '3v3' ? 100 + i * 55 : 150, 600, j.nombre, j.clase, j.nivel, 0, false, j.titulo);
     l.equipo = 'rojo'; return l;
   });
   listaAzules = datos.azules.map((j, i) => {
-    const l = new Luchador(datos.modo === '3v3' ? 950 + i * 55 : 1080, 600, j.nombre, j.clase, j.nivel, 0, false);
+    const l = new Luchador(datos.modo === '3v3' ? 950 + i * 55 : 1080, 600, j.nombre, j.clase, j.nivel, 0, false, j.titulo);
     l.equipo = 'azul'; 
     l.direccionMira = 'izquierda';
     return l;
@@ -204,7 +204,7 @@ socket.on('dungeon_reclutamiento_abierto', (datos: { tiempo: number }) => {
 });
 socket.on('dungeon_actualizar_timer', (datos: { tiempo: number }) => { relojContadorPantalla = datos.tiempo; });
 socket.on('dungeon_actualizar_grupo', (lista: any[]) => {
-  grupoDungeonHéroes = lista.map((h, i) => new Luchador(60 + i * 60, 600, h.nombre, h.clase, h.nivel, 0, true));
+  grupoDungeonHéroes = lista.map((h, i) => new Luchador(60 + i * 60, 600, h.nombre, h.clase, h.nivel, 0, true, h.titulo));
 });
 
 socket.on('dungeon_iniciar', (datos: { jugadores: any[]; nivelMedio: number }) => {
@@ -212,7 +212,7 @@ socket.on('dungeon_iniciar', (datos: { jugadores: any[]; nivelMedio: number }) =
   modoDungeonActivo = true; 
   faseDungeonActual = 0; 
   nivelMedioDungeon = datos.nivelMedio; 
-  grupoDungeonHéroes = datos.jugadores.map((h, i) => new Luchador(80 + i * 60, 600, h.nombre, h.clase, h.nivel, nivelMedioDungeon, true));
+  grupoDungeonHéroes = datos.jugadores.map((h, i) => new Luchador(80 + i * 60, 600, h.nombre, h.clase, h.nivel, nivelMedioDungeon, true, h.titulo));
   monstruoActual = new Monstruo(850, 600, 0, nivelMedioDungeon);
 });
 

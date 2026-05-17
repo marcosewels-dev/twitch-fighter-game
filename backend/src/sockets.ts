@@ -38,6 +38,44 @@ export const AFIJOS_POOL = [
 // Selecciona un afijo aleatorio al encender el servidor (se puede cambiar por un cronómetro diario luego)
 export let afijoDiario = AFIJOS_POOL[Math.floor(Math.random() * AFIJOS_POOL.length)];
 
+// --- SISTEMA DE TÍTULOS DE PRESTIGIO (20 MODIFICADORES) ---
+export const TITULOS_PRESTIGIO = [
+    { id: 'novato', nombre: 'Novato', desc: 'Juega por primera vez' },
+    { id: 'luchador', nombre: 'Luchador', desc: 'Alcanza el Nivel 5' },
+    { id: 'gladiador', nombre: 'Gladiador', desc: 'Alcanza el Nivel 10' },
+    { id: 'veterano', nombre: 'Veterano', desc: 'Alcanza el Nivel 20' },
+    { id: 'maestro', nombre: 'Maestro', desc: 'Alcanza el Nivel 30' },
+    { id: 'leyenda', nombre: 'Leyenda Viva', desc: 'Alcanza el Nivel 50' },
+    { id: 'dios', nombre: 'Dios de la Arena', desc: 'Alcanza el Nivel 100' },
+    { id: 'asesino', nombre: 'Asesino', desc: 'Consigue 10 Victorias' },
+    { id: 'carnicero', nombre: 'Carnicero', desc: 'Consigue 50 Victorias' },
+    { id: 'ejecutor', nombre: 'El Ejecutor', desc: 'Consigue 100 Victorias' },
+    { id: 'rico', nombre: 'Acaudalado', desc: 'Acumula 1.000 Oro' },
+    { id: 'millonario', nombre: 'Millonario', desc: 'Acumula 10.000 Oro' },
+    { id: 'juggernaut', nombre: 'Juggernaut', desc: 'Nivel 20 Guerrero' },
+    { id: 'sombra', nombre: 'Sombra', desc: 'Nivel 20 Ninja' },
+    { id: 'archimago', nombre: 'Archimago', desc: 'Nivel 20 Mago' },
+    { id: 'santo', nombre: 'Santo', desc: 'Nivel 20 Clérigo' },
+    { id: 'franco', nombre: 'Francotirador', desc: 'Nivel 20 Cazador' }
+];
+
+export function obtenerTitulosDesbloqueados(jugador: any): string[] {
+    const titulosGuardados = jugador.get('titulosDesbloqueados') || [];
+    const titulos = new Set<string>(['novato', ...titulosGuardados.map((t: string) => t.toLowerCase())]);
+    const oro = jugador.get('oro') || 0;
+    const vicT = (jugador.get('guerrero')?.victorias || 0) + (jugador.get('ninja')?.victorias || 0) + (jugador.get('mago')?.victorias || 0) + (jugador.get('clerigo')?.victorias || 0) + (jugador.get('cazador')?.victorias || 0);
+    const nivM = Math.max(jugador.get('guerrero')?.nivel || 1, jugador.get('ninja')?.nivel || 1, jugador.get('mago')?.nivel || 1, jugador.get('clerigo')?.nivel || 1, jugador.get('cazador')?.nivel || 1);
+
+    if (nivM >= 5) titulos.add('luchador'); if (nivM >= 10) titulos.add('gladiador'); if (nivM >= 20) titulos.add('veterano');
+    if (nivM >= 30) titulos.add('maestro'); if (nivM >= 50) titulos.add('leyenda'); if (nivM >= 100) titulos.add('dios');
+    if (vicT >= 10) titulos.add('asesino'); if (vicT >= 50) titulos.add('carnicero'); if (vicT >= 100) titulos.add('ejecutor');
+    if (oro >= 1000) titulos.add('rico'); if (oro >= 10000) titulos.add('millonario');
+    if ((jugador.get('guerrero')?.nivel || 1) >= 20) titulos.add('juggernaut'); if ((jugador.get('ninja')?.nivel || 1) >= 20) titulos.add('sombra');
+    if ((jugador.get('mago')?.nivel || 1) >= 20) titulos.add('archimago'); if ((jugador.get('clerigo')?.nivel || 1) >= 20) titulos.add('santo');
+    if ((jugador.get('cazador')?.nivel || 1) >= 20) titulos.add('franco');
+    return Array.from(titulos);
+}
+
 export function configurarSockets(io: Server) {
     ioInstance = io;
     io.on('connection', (socket: Socket) => {
@@ -146,7 +184,7 @@ export function configurarSockets(io: Server) {
                 }
 
                 // Repartir las monedas de las apuestas del chat
-                await EconomiaService.procesarPremiosApuestas(listadoApuestas, datos.nombresGanadores);
+                await EconomiaService.procesarPremiosApuestas(listadoApuestas, bandoGanador);
 
             } catch (e) {
                 console.error('Error al procesar el fin del combate:', e);
@@ -502,10 +540,11 @@ export async function procesarComandoChat(io: Server, username: string, mensaje:
         const targetId = esTest ? `test_user_${Math.floor(Math.random() * 1000)}` : usuarioLimpio.toLowerCase();
         const targetName = esTest ? `${usuarioLimpio}_${Math.floor(Math.random() * 1000)}` : usuarioLimpio;
         let nivelFinal = Math.floor(Math.random() * 4) + 1; // Nivel base
+        let tituloFinal = '';
 
         if (!esTest) {
             try {
-                const jugador = await Jugador.findOne({ twitchId: targetId });
+                let jugador = await Jugador.findOne({ twitchId: targetId });
                 if (jugador) {
                     if (!claseFinal && jugador.claseActual) {
                         claseFinal = jugador.claseActual; // Usamos su clase guardada
@@ -513,6 +552,19 @@ export async function procesarComandoChat(io: Server, username: string, mensaje:
                     // Cogemos su nivel REAL para esa clase
                     const statsClase = jugador.get(claseFinal || 'guerrero');
                     if (statsClase && statsClase.nivel) nivelFinal = statsClase.nivel;
+                    
+                    const titID = jugador.get('tituloEquipado');
+                    if (titID) tituloFinal = TITULOS_PRESTIGIO.find(t => t.id === titID)?.nombre || '';
+                } else {
+                    // EL JUGADOR NO EXISTE: Lo creamos para que se guarden sus progresos futuros
+                    if (!claseFinal) claseFinal = clasesValidas[Math.floor(Math.random() * clasesValidas.length)]!;
+                    jugador = new Jugador({
+                        twitchId: targetId,
+                        username: targetName,
+                        claseActual: claseFinal
+                    });
+                    await jugador.save();
+                    nivelFinal = 1; // Nivel 1 por defecto al empezar
                 }
             } catch (e) { console.error('Error al leer nivel BD:', e); }
         }
@@ -522,7 +574,7 @@ export async function procesarComandoChat(io: Server, username: string, mensaje:
             claseFinal = clasesValidas[Math.floor(Math.random() * clasesValidas.length)]!;
         }
 
-        ArenaService.agregarACola({ twitchId: targetId, nombre: targetName, clase: claseFinal, nivel: nivelFinal });
+        ArenaService.agregarACola({ twitchId: targetId, nombre: targetName, clase: claseFinal, nivel: nivelFinal, titulo: tituloFinal });
 
         const msg = `⚔️ @${targetName} se ha unido a la cola de la Arena como ${claseFinal.toUpperCase()} (Nv.${nivelFinal}).`;
         io.emit('chat_mensaje_bot', { mensaje: msg });
@@ -551,14 +603,27 @@ export async function procesarComandoChat(io: Server, username: string, mensaje:
         const targetId = esTest ? `test_hero_${Math.floor(Math.random() * 1000)}` : usuarioLimpio.toLowerCase();
         const targetName = esTest ? `${usuarioLimpio}_${Math.floor(Math.random() * 1000)}` : usuarioLimpio;
         let nivelFinal = Math.floor(Math.random() * 3) + 2;
+        let tituloFinal = '';
 
         if (!esTest) {
             try {
-                const jugador = await Jugador.findOne({ twitchId: targetId });
+                let jugador = await Jugador.findOne({ twitchId: targetId });
                 if (jugador) {
                     if (!claseFinal && jugador.claseActual) claseFinal = jugador.claseActual;
                     const statsClase = jugador.get(claseFinal || 'guerrero');
                     if (statsClase && statsClase.nivel) nivelFinal = statsClase.nivel;
+                    const titID = jugador.get('tituloEquipado');
+                    if (titID) tituloFinal = TITULOS_PRESTIGIO.find(t => t.id === titID)?.nombre || '';
+                } else {
+                    // EL JUGADOR NO EXISTE: Lo creamos para guardar stats de la raid
+                    if (!claseFinal) claseFinal = clases[Math.floor(Math.random() * clases.length)]!;
+                    jugador = new Jugador({
+                        twitchId: targetId,
+                        username: targetName,
+                        claseActual: claseFinal
+                    });
+                    await jugador.save();
+                    nivelFinal = 1;
                 }
             } catch (e) { console.error('Error al leer nivel BD:', e); }
         }
@@ -566,7 +631,7 @@ export async function procesarComandoChat(io: Server, username: string, mensaje:
         if (!claseFinal) claseFinal = clases[Math.floor(Math.random() * clases.length)]!;
 
         peticionesDungeonPendientes.push({
-            twitchId: targetId, nombre: targetName, clase: claseFinal, nivel: nivelFinal
+            twitchId: targetId, nombre: targetName, clase: claseFinal, nivel: nivelFinal, titulo: tituloFinal
         });
 
         if (esTest) console.log(`⏳ [COLA] Petición de mazmorra en cola. Total: ${peticionesDungeonPendientes.length}`);
@@ -581,15 +646,28 @@ export async function procesarComandoChat(io: Server, username: string, mensaje:
             const targetId = esTest ? `test_hero_${Math.floor(Math.random() * 1000)}` : usuarioLimpio.toLowerCase();
             const targetName = esTest ? `${usuarioLimpio}_${Math.floor(Math.random() * 1000)}` : usuarioLimpio;
             let nivelFinal = Math.floor(Math.random() * 3) + 2; // Nivel base
+            let tituloFinal = '';
 
             if (!esTest) {
                 try {
-                    const jugador = await Jugador.findOne({ twitchId: targetId });
+                    let jugador = await Jugador.findOne({ twitchId: targetId });
                     if (jugador) {
                         if (!claseFinal && jugador.claseActual) claseFinal = jugador.claseActual;
                         
                         const statsClase = jugador.get(claseFinal || 'guerrero');
                         if (statsClase && statsClase.nivel) nivelFinal = statsClase.nivel;
+                        const titID = jugador.get('tituloEquipado');
+                        if (titID) tituloFinal = TITULOS_PRESTIGIO.find(t => t.id === titID)?.nombre || '';
+                    } else {
+                        // EL JUGADOR NO EXISTE: Lo creamos en DB
+                        if (!claseFinal) claseFinal = clases[Math.floor(Math.random() * clases.length)]!;
+                        jugador = new Jugador({
+                            twitchId: targetId,
+                            username: targetName,
+                            claseActual: claseFinal
+                        });
+                        await jugador.save();
+                        nivelFinal = 1;
                     }
                 } catch (e) { console.error('Error al leer nivel BD:', e); }
             }
@@ -598,7 +676,7 @@ export async function procesarComandoChat(io: Server, username: string, mensaje:
                 claseFinal = clases[Math.floor(Math.random() * clases.length)]!;
             }
 
-            DungeonService.agregarHeroe({ twitchId: targetId, nombre: targetName, clase: claseFinal, nivel: nivelFinal });
+            DungeonService.agregarHeroe({ twitchId: targetId, nombre: targetName, clase: claseFinal, nivel: nivelFinal, titulo: tituloFinal });
             io.emit('dungeon_actualizar_grupo', DungeonService.grupoDungeon);
 
             if (DungeonService.grupoDungeon.length >= 5) {
@@ -645,8 +723,50 @@ export async function procesarComandoChat(io: Server, username: string, mensaje:
             if (!esTest) enviarMensajeChat(msg);
         }
     }
+    else if (comando === '!titulos') {
+        const subCmd = partes[1]?.toLowerCase();
+        
+        if (subCmd === 'todos' || subCmd === 'lista') {
+            const lista = TITULOS_PRESTIGIO.map(t => `${t.id}(${t.desc})`).join(', ');
+            const msg = `🏆 TÍTULOS: ${lista}. Usa !titulo [id] para equipar.`;
+            io.emit('chat_mensaje_bot', { mensaje: msg });
+            if (!esTest) enviarMensajeChat(msg.substring(0, 500));
+            return;
+        }
+
+        try {
+            const targetId = usuarioLimpio.toLowerCase();
+            const jugador = await Jugador.findOne({ twitchId: targetId });
+            if (!jugador) return;
+            
+            const desbloqueados = obtenerTitulosDesbloqueados(jugador);
+            const titID = jugador.get('tituloEquipado');
+            const tituloActualStr = titID ? `(Equipado: ${titID})` : '(Ninguno)';
+            const msg = `🏅 @${usuarioLimpio}, tienes ${desbloqueados.length} títulos: ${desbloqueados.join(', ')}. ${tituloActualStr}. Usa !titulo [nombre] para equiparte uno o !titulos todos para ver la lista.`;
+            io.emit('chat_mensaje_bot', { mensaje: msg });
+            if (!esTest) enviarMensajeChat(msg.substring(0, 500));
+        } catch(e) {}
+    }
+    else if (comando === '!titulo') {
+        const tituloId = partes[1]?.toLowerCase();
+        if (!tituloId) return;
+        try {
+            const targetId = usuarioLimpio.toLowerCase();
+            const jugador = await Jugador.findOne({ twitchId: targetId });
+            if (!jugador) return;
+            const desbloqueados = obtenerTitulosDesbloqueados(jugador);
+            if (desbloqueados.includes(tituloId)) {
+                jugador.set('tituloEquipado', tituloId);
+                await jugador.save();
+                const objTit = TITULOS_PRESTIGIO.find(t => t.id === tituloId);
+                const msg = `✅ @${usuarioLimpio} se ha equipado el título de [${objTit?.nombre}]! Lo verás en tu próxima partida.`;
+                io.emit('chat_mensaje_bot', { mensaje: msg });
+                if (!esTest) enviarMensajeChat(msg);
+            }
+        } catch(e) {}
+    }
     else if (comando === '!ayuda' || comando === '!comandos') {
-        const respuestaAyuda = `🤖 COMANDOS: !luchar [clase] | !apostar [bando] [oro] | !dungeon | !entrar | !clase | !stats | !afijo | !top ⚔️ Clases: guerrero, ninja, mago, clerigo, cazador`;
+        const respuestaAyuda = `🤖 COMANDOS: !luchar [clase] | !apostar [bando] [oro] | !dungeon | !entrar | !clase | !stats | !titulos | !afijo | !top ⚔️ Clases: guerrero, ninja, mago, clerigo, cazador`;
         io.emit('chat_mensaje_bot', { mensaje: respuestaAyuda });
         if (!esTest) enviarMensajeChat(respuestaAyuda);
         if (esTest) console.log(`📡 RESPUESTA: ${respuestaAyuda}`);
@@ -662,9 +782,9 @@ export async function procesarComandoChat(io: Server, username: string, mensaje:
             }
 
             const clasePreferida = jugador.claseActual || 'guerrero';
-            const statsClase = jugador.get(clasePreferida) || { nivel: 1, experiencia: 0, victorias: 0 };
+            const statsClase = jugador.get(clasePreferida) || { nivel: 1, xp: 0, victorias: 0 };
             const nivelActual = statsClase.nivel || 1;
-            const xpActual = statsClase.experiencia || 0;
+            const xpActual = statsClase.xp || 0;
             const victorias = statsClase.victorias || 0;
             const oro = jugador.oro || 0;
 

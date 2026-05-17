@@ -1,7 +1,7 @@
 import { Jugador } from '../models/Jugador.js';
-import { enviarMensajeChat } from '../config/twitch.js';
+import { enviarMensajeChat } from '../twitch.js';
 
-interface Apuesta { twitchId: string; username: string; objetivo: string; cantidad: number; }
+export interface Apuesta { usuario: string; bando: string; cantidad: number; }
 
 export class EconomiaService {
   // Procesa el overflow de XP y subidas de nivel dinámicas
@@ -11,17 +11,22 @@ export class EconomiaService {
       if (!perfil) return;
 
       const claseData = (perfil as any)[clase];
-      claseData.xp += xpGanada;
-      perfil.oro += oroGanado;
+      if (!claseData) return;
+
+      // NOTA: Volvemos a usar 'xp' que es el atributo real del schema.
+      claseData.xp = (claseData.xp || 0) + xpGanada;
+      perfil.oro = (perfil.oro || 0) + oroGanado;
       
-      if (gano) claseData.victorias += 1;
-      else claseData.derrotas += 1;
+      if (gano) claseData.victorias = (claseData.victorias || 0) + 1;
+      else claseData.derrotas = (claseData.derrotas || 0) + 1;
 
       let xpNecesaria = claseData.nivel * 100;
       while (claseData.xp >= xpNecesaria) {
         claseData.xp -= xpNecesaria;
         claseData.nivel += 1;
-        enviarMensajeChat(`🎉 ¡LEVEL UP! @${perfil.username} alcanzó el Nivel ${claseData.nivel} como [${clase.toUpperCase()}]! ⚔️`);
+        const msg = `🎉 ¡LEVEL UP! @${perfil.username} alcanzó el Nivel ${claseData.nivel} como [${clase.toUpperCase()}]! ⚔️`;
+        console.log(`[ECONOMÍA] ${msg}`); // Imprimir en consola
+        enviarMensajeChat(msg);
         xpNecesaria = claseData.nivel * 100;
       }
       await perfil.save();
@@ -35,7 +40,9 @@ export class EconomiaService {
     if (nivelGanador > nivelPerdedor) {
       const diferencia = nivelGanador - nivelPerdedor;
       if (diferencia >= 4) {
-        enviarMensajeChat(`🚫 @${usernameGanador} no gana XP por vencer a un oponente demasiado inferior.`);
+        const msg = `🚫 @${usernameGanador} no gana XP por vencer a un oponente demasiado inferior.`;
+        console.log(`[ECONOMÍA] ${msg}`); // Imprimir en consola
+        enviarMensajeChat(msg);
         return 0;
       }
       return Math.max(15, 50 - (diferencia * 10));
@@ -44,23 +51,23 @@ export class EconomiaService {
   }
 
   // Reparte el pozo proporcional de las apuestas del chat
-  static async procesarPremiosApuestas(listadoApuestas: Apuesta[], nombresGanadoresLista: string[]): Promise<void> {
+  static async procesarPremiosApuestas(listadoApuestas: Apuesta[], bandoGanador: string): Promise<void> {
     if (listadoApuestas.length === 0) return;
 
     const bolsaTotalApuestas = listadoApuestas.reduce((acc, ap) => acc + ap.cantidad, 0);
-    const apuestasAcertadas = listadoApuestas.filter(ap => 
-      nombresGanadoresLista.map(n => n.toLowerCase()).includes(ap.objetivo.toLowerCase())
-    );
+    const apuestasAcertadas = listadoApuestas.filter(ap => ap.bando.toLowerCase() === bandoGanador.toLowerCase());
     const bolsaOroAcertadaTotal = apuestasAcertadas.reduce((acc, ap) => acc + ap.cantidad, 0);
 
     for (const apuesta of listadoApuestas) {
-      const ganoApuesta = nombresGanadoresLista.map(n => n.toLowerCase()).includes(apuesta.objetivo.toLowerCase());
-      if (ganoApuesta && bolsaOroAcertadaTotal > 0) {
+      if (apuesta.bando.toLowerCase() === bandoGanador.toLowerCase() && bolsaOroAcertadaTotal > 0) {
         const porcentajeParticipacion = apuesta.cantidad / bolsaOroAcertadaTotal;
         const premioLimpio = Math.floor(bolsaTotalApuestas * porcentajeParticipacion);
 
-        await Jugador.findOneAndUpdate({ twitchId: apuesta.twitchId }, { $inc: { oro: premioLimpio } });
-        enviarMensajeChat(`💰 @${apuesta.username} ganó su apuesta: +${premioLimpio} oro!`);
+        // En Twitch, asumimos que el id del jugador en DB es su usuario en minúsculas
+        await Jugador.findOneAndUpdate({ twitchId: apuesta.usuario.toLowerCase() }, { $inc: { oro: premioLimpio } });
+        const msg = `💰 @${apuesta.usuario} ganó su apuesta: +${premioLimpio} oro!`;
+        console.log(`[ECONOMÍA] ${msg}`); // Imprimir en consola
+        // Opcional: enviarMensajeChat(msg); -> Puedes habilitarlo, pero puede generar spam en el chat de Twitch.
       }
     }
   }

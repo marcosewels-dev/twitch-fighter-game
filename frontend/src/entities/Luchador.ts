@@ -36,10 +36,12 @@ export class Luchador {
   velocidadAnimacion = 6; // Velocidad a la que cambian los fotogramas (menor = más rápido)
   spritesFila = { idle: 0, run: 1, attack: 2 }; // Qué fila de la imagen es cada animación
   framesPorEstado = { idle: 4, run: 6, attack: 4 }; // Cuántos frames tiene cada animación
+  titulo: string = '';
 
-  constructor(x: number, y: number, nombre: string, tipo: TipoLuchador, nivel: number, nivelRival: number = 0, esDungeon: boolean = false) {
+  constructor(x: number, y: number, nombre: string, tipo: TipoLuchador, nivel: number, nivelRival: number = 0, esDungeon: boolean = false, titulo: string = '') {
     this.x = x; this.y = y; this.nombre = nombre; this.tipo = tipo;
     this.nivel = nivel;
+    this.titulo = titulo;
 
     if (esDungeon && nivel > nivelRival && nivelRival > 0) {
       this.nivel = Math.min(nivel, Math.round(nivelRival + 2)); 
@@ -186,7 +188,8 @@ export class Luchador {
     }
     ctx.restore();
 
-    const etiquetaNombre = `${this.congeladoTimer > 0 ? '🥶 ' : (this.esNovatoDopado ? '🔰 ' : '')}${this.nombre} (Nv.${this.nivel})`;
+    const prefijoTit = this.titulo ? `[${this.titulo}] ` : '';
+    const etiquetaNombre = `${this.congeladoTimer > 0 ? '🥶 ' : (this.esNovatoDopado ? '🔰 ' : '')}${prefijoTit}${this.nombre} (Nv.${this.nivel})`;
     ctx.fillStyle = '#fff'; ctx.font = 'bold 13px Arial'; ctx.textAlign = 'center'; ctx.strokeStyle = '#000'; ctx.lineWidth = 3;
     ctx.strokeText(etiquetaNombre, centroX, this.y - 25); ctx.fillText(etiquetaNombre, centroX, this.y - 25);
 
