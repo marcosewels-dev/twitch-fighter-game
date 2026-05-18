@@ -235,13 +235,13 @@ function gameLoop() {
     intensidadTemblor *= 0.85; if (intensidadTemblor < 0.5) intensidadTemblor = 0;
   }
 
-  // 🔮 DIBUJAR AFIJO ACTIVO EN LA ESQUINA
+  // 🔮 DIBUJAR AFIJO ACTIVO EN LA PANTALLA
   const af = (window as any).afijoDiario;
   if (af) {
-      ctx.fillStyle = '#fff'; ctx.font = 'bold 16px Arial'; ctx.textAlign = 'left';
+      ctx.fillStyle = '#f39c12'; ctx.font = 'bold 16px Arial'; ctx.textAlign = 'center';
       ctx.strokeStyle = '#000'; ctx.lineWidth = 3;
-      ctx.strokeText(`🔮 Hoy: ${af.nombre}`, 10, 25);
-      ctx.fillText(`🔮 Hoy: ${af.nombre}`, 10, 25);
+      ctx.strokeText(`🔮 Modificador de Arena: ${af.nombre}`, canvas.width / 2, canvas.height - 40);
+      ctx.fillText(`🔮 Modificador de Arena: ${af.nombre}`, canvas.width / 2, canvas.height - 40);
   }
 
 if (apuestasActivasFase) {

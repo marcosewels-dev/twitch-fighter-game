@@ -127,10 +127,14 @@ export class Monstruo {
 
     // --- ACTUALIZAR MÁQUINA DE ESTADOS Y ANIMACIONES ---
     const maxCooldown = this.fase === 3 ? 35 : 50;
+    let nuevoEstado: 'idle' | 'run' | 'attack' = 'idle';
     if (this.cooldownAtaque > maxCooldown - 15 && this.congeladoTimer === 0) { // Si acaba de atacar
-      this.estadoAnim = 'attack';
-    } else {
-      this.estadoAnim = 'idle'; // Monstruos no se mueven (no necesitan run), así que idle es por defecto
+      nuevoEstado = 'attack';
+    }
+
+    if (this.estadoAnim !== nuevoEstado) {
+      this.estadoAnim = nuevoEstado;
+      this.frameActual = 0; // Reiniciamos el frame para evitar parpadeos
     }
 
     this.frameTick++;

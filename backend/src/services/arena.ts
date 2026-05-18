@@ -37,6 +37,15 @@ export class ArenaService {
       return { arrancó: true, modo: '3v3' };
     } 
     
+    // ⚖️ Si hay 4 o 5 jugadores, formamos un 2v2 (usando el formato visual del 3v3)
+    if (this.colaEspera.length >= 4) {
+      this.peleaEnCurso = true;
+      this.modoDeCombate = '3v3';
+      this.contendientesRojos = [this.colaEspera.shift()!, this.colaEspera.shift()!];
+      this.contendientesAzules = [this.colaEspera.shift()!, this.colaEspera.shift()!];
+      return { arrancó: true, modo: '3v3' };
+    }
+    
     if (this.colaEspera.length >= 2) {
       this.peleaEnCurso = true;
       this.modoDeCombate = '1v1';

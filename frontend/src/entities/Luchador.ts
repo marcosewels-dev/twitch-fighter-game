@@ -214,12 +214,16 @@ export class Luchador {
     this.anguloArma *= 0.8;
 
     // --- ACTUALIZAR MÁQUINA DE ESTADOS Y ANIMACIONES ---
+    let nuevoEstado: 'idle' | 'run' | 'attack' = 'idle';
     if (this.cooldownAtaque > 15) { // Si acaba de atacar, mostramos animación de ataque
-      this.estadoAnim = 'attack';
+      nuevoEstado = 'attack';
     } else if (Math.abs(this.vx) > 0.5 && this.congeladoTimer === 0) {
-      this.estadoAnim = 'run';
-    } else {
-      this.estadoAnim = 'idle';
+      nuevoEstado = 'run';
+    }
+    
+    if (this.estadoAnim !== nuevoEstado) {
+      this.estadoAnim = nuevoEstado;
+      this.frameActual = 0; // Reiniciamos el frame para evitar parpadeos
     }
 
     this.frameTick++;

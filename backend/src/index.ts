@@ -4,7 +4,7 @@ import http from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import { conectarDB } from './config/db.js';
-import { iniciarBotTwitch } from './twitch.js';
+import { inicializarTwitch } from './config/twitch.js';
 import { configurarSockets } from './sockets.js';
 import { Jugador } from './models/Jugador.js';
 
@@ -31,12 +31,12 @@ app.get('/api/ranking', async (req, res) => {
   try {
     const jugadores = await Jugador.find();
     const ranking = jugadores.map(j => {
-      const victoriasTotales = (j.guerrero?.victorias || 0) + 
-                               (j.ninja?.victorias || 0) + 
-                               (j.mago?.victorias || 0) +
-                               (j.clerigo?.victorias || 0) + 
-                               (j.cazador?.victorias || 0); 
-      return { username: j.username, victorias: victoriasTotales, claseActual: j.claseActual };
+      const victoriasTotales = (j.get('guerrero')?.victorias || 0) + 
+                               (j.get('ninja')?.victorias || 0) + 
+                               (j.get('mago')?.victorias || 0) +
+                               (j.get('clerigo')?.victorias || 0) + 
+                               (j.get('cazador')?.victorias || 0); 
+      return { username: j.get('username'), victorias: victoriasTotales, claseActual: j.get('claseActual') };
     })
     .filter(j => j.victorias > 0) 
     .sort((a, b) => b.victorias - a.victorias)
@@ -61,7 +61,7 @@ const io = new Server(server, {
 async function arrancarServidor() {
   await conectarDB();
   configurarSockets(io);
-  iniciarBotTwitch(io); // Inicializamos el bot de Twitch pasándole la instancia de WebSockets
+  inicializarTwitch(io); // Inicializamos el bot de Twitch pasándole la instancia de WebSockets
 
   const PORT = process.env.PORT || 3000;
   server.listen(PORT, () => {

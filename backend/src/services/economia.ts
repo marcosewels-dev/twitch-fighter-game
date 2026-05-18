@@ -1,5 +1,5 @@
 import { Jugador } from '../models/Jugador.js';
-import { enviarMensajeChat } from '../twitch.js';
+import { enviarMensajeChat } from '../config/twitch.js';
 
 export interface Apuesta { usuario: string; bando: string; cantidad: number; }
 
@@ -15,7 +15,7 @@ export class EconomiaService {
 
       // NOTA: Volvemos a usar 'xp' que es el atributo real del schema.
       claseData.xp = (claseData.xp || 0) + xpGanada;
-      perfil.oro = (perfil.oro || 0) + oroGanado;
+      perfil.set('oro', (perfil.get('oro') || 0) + oroGanado);
       
       if (gano) claseData.victorias = (claseData.victorias || 0) + 1;
       else claseData.derrotas = (claseData.derrotas || 0) + 1;
@@ -29,6 +29,8 @@ export class EconomiaService {
         enviarMensajeChat(msg);
         xpNecesaria = claseData.nivel * 100;
       }
+      
+      perfil.markModified(clase); // 🛡️ CRÍTICO: Obliga a Mongoose a registrar los cambios en la sub-clase
       await perfil.save();
     } catch (err) {
       console.error('Error al procesar subida de nivel:', err);
@@ -63,9 +65,12 @@ export class EconomiaService {
         const porcentajeParticipacion = apuesta.cantidad / bolsaOroAcertadaTotal;
         const premioLimpio = Math.floor(bolsaTotalApuestas * porcentajeParticipacion);
 
-        // En Twitch, asumimos que el id del jugador en DB es su usuario en minúsculas
-        await Jugador.findOneAndUpdate({ twitchId: apuesta.usuario.toLowerCase() }, { $inc: { oro: premioLimpio } });
-        const msg = `💰 @${apuesta.usuario} ganó su apuesta: +${premioLimpio} oro!`;
+        const jug = await Jugador.findOne({ twitchId: apuesta.usuario.toLowerCase() });
+        if (jug) {
+            jug.set('oro', (jug.get('oro') || 0) + premioLimpio);
+            await jug.save();
+        }
+        const msg = `💰 @${apuesta.usuario} ganó su apuesta: +${premioLimpio} 🪙!`;
         console.log(`[ECONOMÍA] ${msg}`); // Imprimir en consola
         // Opcional: enviarMensajeChat(msg); -> Puedes habilitarlo, pero puede generar spam en el chat de Twitch.
       }
