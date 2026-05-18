@@ -42,6 +42,14 @@ async function manejarLuchar(io: Server, usuarioLimpio: string, partes: string[]
     let nivelFinal = 1;
     let tituloFinal = '';
 
+    // 🛡️ ANTI-EXPLOIT: Evitar que el jugador se clone a sí mismo o participe en varios sitios a la vez
+    const enCola = ArenaService.obtenerCola().some(j => j.twitchId === targetId);
+    const peleandoRojo = ArenaService.contendientesRojos.some(j => j.twitchId === targetId);
+    const peleandoAzul = ArenaService.contendientesAzules.some(j => j.twitchId === targetId);
+    const enDungeon = DungeonService.grupoDungeon.some(j => j.twitchId === targetId);
+    const enColaDungeon = peticionesDungeonPendientes.some(j => j.twitchId === targetId);
+    if (enCola || peleandoRojo || peleandoAzul || enDungeon || enColaDungeon) return;
+
     try {
         let jugador = await Jugador.findOne({ twitchId: targetId });
         if (jugador) {
@@ -123,6 +131,14 @@ async function manejarDungeon(io: Server, usuarioLimpio: string, partes: string[
     const targetName = usuarioLimpio;
     let nivelFinal = 1;
     let tituloFinal = '';
+
+    // 🛡️ ANTI-EXPLOIT: Evitar que el jugador se clone a sí mismo o participe en varios sitios a la vez
+    const enCola = ArenaService.obtenerCola().some(j => j.twitchId === targetId);
+    const peleandoRojo = ArenaService.contendientesRojos.some(j => j.twitchId === targetId);
+    const peleandoAzul = ArenaService.contendientesAzules.some(j => j.twitchId === targetId);
+    const enDungeon = DungeonService.grupoDungeon.some(j => j.twitchId === targetId);
+    const enColaDungeon = peticionesDungeonPendientes.some(j => j.twitchId === targetId);
+    if (enCola || peleandoRojo || peleandoAzul || enDungeon || enColaDungeon) return;
 
     try {
         let jugador = await Jugador.findOne({ twitchId: targetId });
