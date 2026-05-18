@@ -43,12 +43,18 @@ async function manejarLuchar(io: Server, usuarioLimpio: string, partes: string[]
     let tituloFinal = '';
 
     // 🛡️ ANTI-EXPLOIT: Evitar que el jugador se clone a sí mismo o participe en varios sitios a la vez
-    const enCola = ArenaService.obtenerCola().some(j => j.twitchId === targetId);
-    const peleandoRojo = ArenaService.contendientesRojos.some(j => j.twitchId === targetId);
-    const peleandoAzul = ArenaService.contendientesAzules.some(j => j.twitchId === targetId);
-    const enDungeon = DungeonService.grupoDungeon.some(j => j.twitchId === targetId);
-    const enColaDungeon = peticionesDungeonPendientes.some(j => j.twitchId === targetId);
-    if (enCola || peleandoRojo || peleandoAzul || enDungeon || enColaDungeon) return;
+    const enCola = ArenaService.obtenerCola()?.some(j => j.twitchId === targetId);
+    const peleandoRojo = ArenaService.contendientesRojos?.some(j => j.twitchId === targetId);
+    const peleandoAzul = ArenaService.contendientesAzules?.some(j => j.twitchId === targetId);
+    const enDungeon = DungeonService.grupoDungeon?.some(j => j.twitchId === targetId);
+    const enColaDungeon = peticionesDungeonPendientes?.some(j => j.twitchId === targetId);
+    
+    if (enCola || peleandoRojo || peleandoAzul || enDungeon || enColaDungeon) {
+        const msg = `❌ @${usuarioLimpio}, ya estás participando en un combate o esperando en la cola.`;
+        io.emit('chat_mensaje_bot', { mensaje: msg });
+        if (!esTest) enviarMensajeChat(msg);
+        return;
+    }
 
     try {
         let jugador = await Jugador.findOne({ twitchId: targetId });
@@ -112,14 +118,40 @@ async function manejarLuchar(io: Server, usuarioLimpio: string, partes: string[]
 async function manejarApostar(io: Server, usuarioLimpio: string, partes: string[], esTest: boolean) {
     const bando = partes[1]?.toLowerCase();
     const cantidad = parseInt(partes[2] || '0');
+    const targetId = usuarioLimpio.toLowerCase();
 
     if (!apuestasAbiertas) {
         if (esTest) console.log(`❌ [TEST] Apuestas cerradas.`);
         return;
     }
-    if ((bando === 'rojo' || bando === 'azul') && cantidad > 0) {
-        registrarApuesta({ usuario: usuarioLimpio, bando: bando, cantidad: cantidad });
+    if ((bando !== 'rojo' && bando !== 'azul') || isNaN(cantidad) || cantidad <= 0) return;
+
+    // Evitar que apuesten varias veces en la misma ronda
+    if (listadoApuestas.some(a => a.usuario.toLowerCase() === targetId)) {
+        const msg = `❌ @${usuarioLimpio}, ya has apostado en esta ronda.`;
+        io.emit('chat_mensaje_bot', { mensaje: msg });
+        if (!esTest) enviarMensajeChat(msg);
+        return;
     }
+
+    try {
+        const jugador = await Jugador.findOne({ twitchId: targetId });
+        if (!jugador) return;
+        
+        const oroActual = jugador.get('oro') || 0;
+        if (oroActual < cantidad) {
+            const msg = `❌ @${usuarioLimpio}, no tienes oro suficiente (Fondo: ${oroActual} 🪙).`;
+            io.emit('chat_mensaje_bot', { mensaje: msg });
+            if (!esTest) enviarMensajeChat(msg);
+            return;
+        }
+        
+        // Retiramos el oro al momento de apostar para que no pueda gastarlo en otra cosa
+        jugador.set('oro', oroActual - cantidad);
+        await jugador.save();
+        
+        registrarApuesta({ usuario: usuarioLimpio, bando: bando, cantidad: cantidad });
+    } catch(e) { console.error('Error al apostar:', e); }
 }
 
 async function manejarDungeon(io: Server, usuarioLimpio: string, partes: string[], esTest: boolean, comando: string) {
@@ -133,12 +165,18 @@ async function manejarDungeon(io: Server, usuarioLimpio: string, partes: string[
     let tituloFinal = '';
 
     // 🛡️ ANTI-EXPLOIT: Evitar que el jugador se clone a sí mismo o participe en varios sitios a la vez
-    const enCola = ArenaService.obtenerCola().some(j => j.twitchId === targetId);
-    const peleandoRojo = ArenaService.contendientesRojos.some(j => j.twitchId === targetId);
-    const peleandoAzul = ArenaService.contendientesAzules.some(j => j.twitchId === targetId);
-    const enDungeon = DungeonService.grupoDungeon.some(j => j.twitchId === targetId);
-    const enColaDungeon = peticionesDungeonPendientes.some(j => j.twitchId === targetId);
-    if (enCola || peleandoRojo || peleandoAzul || enDungeon || enColaDungeon) return;
+    const enCola = ArenaService.obtenerCola()?.some(j => j.twitchId === targetId);
+    const peleandoRojo = ArenaService.contendientesRojos?.some(j => j.twitchId === targetId);
+    const peleandoAzul = ArenaService.contendientesAzules?.some(j => j.twitchId === targetId);
+    const enDungeon = DungeonService.grupoDungeon?.some(j => j.twitchId === targetId);
+    const enColaDungeon = peticionesDungeonPendientes?.some(j => j.twitchId === targetId);
+    
+    if (enCola || peleandoRojo || peleandoAzul || enDungeon || enColaDungeon) {
+        const msg = `❌ @${usuarioLimpio}, ya estás participando en un combate o esperando en la cola.`;
+        io.emit('chat_mensaje_bot', { mensaje: msg });
+        if (!esTest) enviarMensajeChat(msg);
+        return;
+    }
 
     try {
         let jugador = await Jugador.findOne({ twitchId: targetId });
@@ -328,7 +366,7 @@ async function manejarTitulo(io: Server, usuarioLimpio: string, partes: string[]
 }
 
 async function manejarAyuda(io: Server, usuarioLimpio: string, partes: string[], esTest: boolean) {
-    const respuestaAyuda = `🤖 COMANDOS: !luchar [clase] | !apostar [bando] [oro] | !dungeon | !entrar | !clase | !stats | !titulos [lista/info] | !afijo | !top ⚔️ Clases: guerrero, ninja, mago, clerigo, cazador`;
+    const respuestaAyuda = `🤖 COMANDOS: !luchar [clase] | !apostar [bando] [oro] | !dungeon | !entrar | !clase | !stats | !titulos [info] | !afijo | !top | !regalar ⚔️ Clases: guerrero, ninja, mago, clerigo, cazador`;
     io.emit('chat_mensaje_bot', { mensaje: respuestaAyuda });
     if (!esTest) enviarMensajeChat(respuestaAyuda);
     if (esTest) console.log(`📡 RESPUESTA: ${respuestaAyuda}`);
