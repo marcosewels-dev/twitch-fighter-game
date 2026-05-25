@@ -9,7 +9,7 @@ import { configurarSockets } from './sockets.js';
 import { Jugador } from './models/Jugador.js';
 
 // Limpiamos la URL (quitamos la barra '/' final si la tiene por error)
-const frontendUrls = process.env.FRONTEND_URL 
+/*const frontendUrls = process.env.FRONTEND_URL 
   ? [process.env.FRONTEND_URL.replace(/\/$/, ""), "http://localhost:5173", "http://127.0.0.1:5173"] 
   : "*";
 
@@ -70,3 +70,4 @@ async function arrancarServidor() {
 }
 
 arrancarServidor();
+*/
