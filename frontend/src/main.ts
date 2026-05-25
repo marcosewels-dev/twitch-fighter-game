@@ -30,7 +30,7 @@ function registrarTrazaTest(mensaje: string) {
 }
 
 // 📡 Interceptores para Visualizar la Extracción de Datos
-/*socket.on('connect', () => {
+socket.on('connect', () => {
   registrarTrazaTest(`✅ Sockets: Canal de red abierto con el Servidor.`);
 });
 
@@ -506,4 +506,3 @@ else if (!modoDungeonActivo && !reclutamientoDungeon && listaRojos.length > 0 &&
 }
 
 gameLoop();
-*/
